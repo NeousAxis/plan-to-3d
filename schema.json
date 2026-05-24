@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "plan-to-3d building specification",
+  "type": "object",
+  "required": ["walls"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "units": {"type": "string", "default": "m"},
+        "wall_height": {"type": "number", "default": 2.7, "description": "default wall height (m)"},
+        "wall_thickness": {"type": "number", "default": 0.2, "description": "default wall thickness (m)"}
+      },
+      "additionalProperties": true
+    },
+    "walls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["start", "end"],
+        "properties": {
+          "start": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+          "end": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+          "thickness": {"type": "number", "description": "overrides meta.wall_thickness"},
+          "height": {"type": "number", "description": "overrides meta.wall_height"},
+          "type": {"type": "string", "enum": ["exterior", "interior"]}
+        }
+      }
+    },
+    "openings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["wall"],
+        "properties": {
+          "wall": {"type": "integer", "description": "index into walls[]"},
+          "kind": {"type": "string", "enum": ["door", "window"], "default": "window"},
+          "position": {"type": "number", "minimum": 0, "maximum": 1, "description": "center as fraction of wall length"},
+          "distance": {"type": "number", "description": "center in metres from wall start (overrides position)"},
+          "width": {"type": "number", "default": 0.9},
+          "height": {"type": "number", "description": "opening height (door ~2.1, window ~1.2)"},
+          "sill": {"type": "number", "description": "bottom height (door 0, window ~0.9)"}
+        }
+      }
+    },
+    "slab": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean", "default": true},
+        "thickness": {"type": "number", "default": 0.15},
+        "margin": {"type": "number", "default": 0.0, "description": "extend slab beyond footprint (m)"}
+      }
+    },
+    "roof": {
+      "type": "object",
+      "properties": {
+        "type": {"type": "string", "enum": ["none", "flat", "gable"], "default": "none"},
+        "height": {"type": "number", "description": "gable rise (m)"},
+        "thickness": {"type": "number", "default": 0.2, "description": "flat roof slab thickness"},
+        "overhang": {"type": "number", "default": 0.3},
+        "ridge_axis": {"type": "string", "enum": ["x", "y"], "default": "x"}
+      }
+    },
+    "rooms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "at"],
+        "properties": {
+          "name": {"type": "string"},
+          "at": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2,
+                 "description": "interior anchor point for the label (plan coords)"}
+        }
+      }
+    }
+  }
+}

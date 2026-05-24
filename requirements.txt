@@ -1,0 +1,10 @@
+# Core 3D generation (generate.py) needs NOTHING beyond the Python stdlib.
+# The packages below are only for input ingestion and the PNG preview.
+
+Pillow            # ingest.py: raster image normalization (all image inputs)
+pymupdf           # ingest.py: PDF -> PNG (one page per image)
+matplotlib        # generate.py --preview: isometric PNG preview render
+
+# Optional extras (uncomment if needed):
+# cairosvg        # ingest.py: rasterize .svg plans
+# pygltflib       # validate the produced .glb against the glTF 2.0 spec
