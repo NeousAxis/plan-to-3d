@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "name": "Second Floor Apartment (from real_plan_2.jpg)",
+    "units": "m",
+    "wall_height": 2.6,
+    "wall_thickness": 0.25,
+    "_source": "interpreted from raw.githubusercontent.com/zlzeng/DeepFloorplan/master/demo/45765448.jpg"
+  },
+  "walls": [
+    {"start": [0, 0],    "end": [13.5, 0],    "type": "exterior"},
+    {"start": [13.5, 0], "end": [13.5, 10],   "type": "exterior"},
+    {"start": [13.5, 10],"end": [0, 10],      "type": "exterior"},
+    {"start": [0, 10],   "end": [0, 0],       "type": "exterior"},
+
+    {"start": [0, 5.08],  "end": [13.5, 5.08],"type": "interior", "thickness": 0.1},
+    {"start": [7.1, 0],   "end": [7.1, 5.08], "type": "interior", "thickness": 0.1},
+    {"start": [11.5, 0],  "end": [11.5, 5.08],"type": "interior", "thickness": 0.1},
+    {"start": [2.49, 5.08],"end": [2.49, 6.6],"type": "interior", "thickness": 0.1},
+    {"start": [0, 6.6],   "end": [13.5, 6.6], "type": "interior", "thickness": 0.1},
+    {"start": [5.16, 6.6],"end": [5.16, 10],  "type": "interior", "thickness": 0.1},
+    {"start": [9.66, 6.6],"end": [9.66, 10],  "type": "interior", "thickness": 0.1}
+  ],
+  "openings": [
+    {"wall": 0, "kind": "window", "distance": 3.5, "width": 2.0, "sill": 0.9, "height": 1.4},
+    {"wall": 0, "kind": "window", "distance": 9.3, "width": 1.6, "sill": 0.9, "height": 1.3},
+    {"wall": 1, "kind": "window", "distance": 2.5, "width": 0.8, "sill": 1.2, "height": 1.0},
+    {"wall": 1, "kind": "window", "distance": 8.3, "width": 1.6, "sill": 0.9, "height": 1.3},
+    {"wall": 2, "kind": "window", "distance": 6.1, "width": 1.6, "sill": 0.9, "height": 1.3},
+    {"wall": 2, "kind": "window", "distance": 11.0,"width": 1.6, "sill": 0.9, "height": 1.3},
+    {"wall": 3, "kind": "window", "distance": 1.7, "width": 1.6, "sill": 0.9, "height": 1.3},
+    {"wall": 3, "kind": "window", "distance": 4.2, "width": 0.7, "sill": 1.2, "height": 1.0},
+    {"wall": 3, "kind": "door",   "distance": 9.0, "width": 0.95, "height": 2.1},
+
+    {"wall": 4, "kind": "door", "distance": 5.0, "width": 0.9,  "height": 2.05},
+    {"wall": 4, "kind": "door", "distance": 9.3, "width": 0.85, "height": 2.05},
+    {"wall": 7, "kind": "door", "distance": 0.7, "width": 0.8,  "height": 2.05},
+    {"wall": 8, "kind": "door", "distance": 2.5, "width": 0.85, "height": 2.05},
+    {"wall": 8, "kind": "door", "distance": 7.4, "width": 0.85, "height": 2.05},
+    {"wall": 8, "kind": "door", "distance": 11.5,"width": 0.85, "height": 2.05}
+  ],
+  "slab": {"enabled": true, "thickness": 0.2, "margin": 0.0},
+  "roof": {"type": "flat", "thickness": 0.2, "overhang": 0.0},
+  "rooms": [
+    {"name": "Reception Room", "at": [3.5, 2.5]},
+    {"name": "Bedroom",        "at": [9.3, 2.5]},
+    {"name": "Bathroom",       "at": [12.5, 2.5]},
+    {"name": "Bathroom",       "at": [1.2, 5.8]},
+    {"name": "Hall",           "at": [7.5, 5.8]},
+    {"name": "Bedroom",        "at": [2.5, 8.3]},
+    {"name": "Kitchen",        "at": [7.4, 8.3]},
+    {"name": "Bedroom",        "at": [11.5, 8.3]}
+  ]
+}

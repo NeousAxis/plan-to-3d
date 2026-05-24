@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "name": "Demo House",
+    "units": "m",
+    "wall_height": 2.7,
+    "wall_thickness": 0.2
+  },
+  "walls": [
+    {"start": [0, 0], "end": [8, 0], "type": "exterior"},
+    {"start": [8, 0], "end": [8, 6], "type": "exterior"},
+    {"start": [8, 6], "end": [0, 6], "type": "exterior"},
+    {"start": [0, 6], "end": [0, 0], "type": "exterior"},
+    {"start": [5, 0], "end": [5, 6], "type": "interior", "thickness": 0.12}
+  ],
+  "openings": [
+    {"wall": 0, "kind": "door",   "position": 0.30, "width": 0.95, "height": 2.10},
+    {"wall": 0, "kind": "window", "position": 0.72, "width": 1.40, "height": 1.20, "sill": 0.95},
+    {"wall": 1, "kind": "window", "position": 0.50, "width": 1.20, "height": 1.20, "sill": 0.95},
+    {"wall": 2, "kind": "window", "position": 0.35, "width": 1.60, "height": 1.20, "sill": 0.95},
+    {"wall": 3, "kind": "window", "position": 0.50, "width": 1.20, "height": 1.20, "sill": 0.95},
+    {"wall": 4, "kind": "door",   "position": 0.75, "width": 0.90, "height": 2.10}
+  ],
+  "slab": {"enabled": true, "thickness": 0.15, "margin": 0.10},
+  "roof": {"type": "gable", "height": 1.6, "overhang": 0.4, "ridge_axis": "x"},
+  "rooms": [
+    {"name": "Living room", "at": [2.5, 3.0]},
+    {"name": "Bedroom", "at": [6.5, 3.0]}
+  ]
+}
