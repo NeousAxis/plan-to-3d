@@ -51,8 +51,8 @@ MATERIALS = {
     "frame":      _mat([0.28, 0.29, 0.31, 1.0], rough=0.4, metal=0.7),
     "door":       _mat([0.56, 0.41, 0.27, 1.0], rough=0.55),
     # --- furniture / fixture families ---
-    "wood":       _mat([0.55, 0.40, 0.27, 1.0], rough=0.6),
-    "wood_light": _mat([0.80, 0.66, 0.47, 1.0], rough=0.55),
+    "wood":       _mat([0.55, 0.40, 0.27, 1.0], rough=0.55),
+    "wood_light": _mat([0.80, 0.66, 0.47, 1.0], rough=0.50),
     "white":      _mat([0.92, 0.92, 0.93, 1.0], rough=0.5),
     "fabric":     _mat([0.42, 0.45, 0.52, 1.0], rough=0.96),
     "fabric_warm":_mat([0.66, 0.60, 0.52, 1.0], rough=0.96),
@@ -60,7 +60,7 @@ MATERIALS = {
     "dark":       _mat([0.15, 0.16, 0.18, 1.0], rough=0.5),
     "screen":     _mat([0.04, 0.05, 0.07, 1.0], rough=0.2,
                        emissive=[0.05, 0.09, 0.15]),
-    "stone":      _mat([0.82, 0.81, 0.78, 1.0], rough=0.65),  # worktops
+    "stone":      _mat([0.92, 0.91, 0.88, 1.0], rough=0.32),  # polished marble worktops
     "concrete":   _mat([0.66, 0.66, 0.67, 1.0], rough=0.9),   # columns
     "plant":      _mat([0.33, 0.52, 0.29, 1.0], rough=0.85),
     "plant_dark": _mat([0.21, 0.39, 0.21, 1.0], rough=0.85),
@@ -1268,31 +1268,89 @@ function finishTex(canvas, tile){
   return t;
 }
 function texWood(base, tile){
-  const s=512, c=mkCanvas(s), x=c.getContext('2d');
-  x.fillStyle=base; x.fillRect(0,0,s,s);
-  for(let i=0;i<2400;i++){
-    const px=Math.random()*s, py=Math.random()*s, h=Math.random()*150+40;
-    const dark=Math.random()>0.5;
-    x.strokeStyle=(dark?'rgba(45,28,12,':'rgba(255,236,205,')+(Math.random()*0.16).toFixed(3)+')';
-    x.lineWidth=Math.random()*2.2+0.4;
-    x.beginPath(); x.moveTo(px,py); x.lineTo(px+Math.random()*5-2.5, py+h); x.stroke();
+  // Layered procedural wood: long parallel growth lines first, then a few
+  // strong "annual rings" curves on top, then knots. Reads as oak.
+  const s = 1024, c = mkCanvas(s), x = c.getContext('2d');
+  // base tone with a subtle vertical gradient (heart -> sapwood)
+  const g = x.createLinearGradient(0, 0, s, 0);
+  g.addColorStop(0, base);
+  g.addColorStop(0.5, shadeHex(base, 0.92));
+  g.addColorStop(1, base);
+  x.fillStyle = g; x.fillRect(0, 0, s, s);
+  // long vertical growth lines (the "grain")
+  for(let i = 0; i < 6000; i++){
+    const px = Math.random()*s, py = Math.random()*s;
+    const h = Math.random()*280 + 60;
+    const dx = (Math.random() - 0.5) * 3.5;
+    const dark = Math.random() > 0.55;
+    x.strokeStyle = (dark ? 'rgba(38,22,10,' : 'rgba(255,232,200,')
+                    + (Math.random()*0.20).toFixed(3) + ')';
+    x.lineWidth = Math.random()*1.6 + 0.3;
+    x.beginPath(); x.moveTo(px, py); x.lineTo(px+dx, py+h); x.stroke();
   }
-  return finishTex(c, tile||1.3);
+  // a few stronger "annual ring" arcs to break the regularity
+  for(let i = 0; i < 12; i++){
+    x.strokeStyle = 'rgba(32,18,8,0.25)';
+    x.lineWidth = 1.2;
+    const cx = Math.random()*s, cy = Math.random()*s;
+    const r = 80 + Math.random()*220;
+    x.beginPath(); x.arc(cx, cy, r, 0, 6.283); x.stroke();
+  }
+  // sparse darker knots
+  for(let i = 0; i < 5; i++){
+    const px = Math.random()*s, py = Math.random()*s, r = 4 + Math.random()*9;
+    const grd = x.createRadialGradient(px, py, 0, px, py, r);
+    grd.addColorStop(0, 'rgba(28,12,4,0.85)');
+    grd.addColorStop(1, 'rgba(28,12,4,0)');
+    x.fillStyle = grd; x.beginPath(); x.arc(px, py, r, 0, 6.283); x.fill();
+  }
+  return finishTex(c, tile || 1.3);
+}
+function shadeHex(hex, factor){
+  const r = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(1,3),16) * factor)));
+  const g = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(3,5),16) * factor)));
+  const b = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(5,7),16) * factor)));
+  return '#' + r.toString(16).padStart(2,'0') + g.toString(16).padStart(2,'0')
+             + b.toString(16).padStart(2,'0');
 }
 function texTerrazzo(){
-  const s=512, c=mkCanvas(s), x=c.getContext('2d');
-  x.fillStyle='#dad7d0'; x.fillRect(0,0,s,s);
-  const cols=['#9aa0a6','#b9622f','#3b3f46','#c9c4ba','#7d8a6f','#a89a86'];
-  for(let i=0;i<950;i++){
-    x.fillStyle=cols[(Math.random()*cols.length)|0]; x.globalAlpha=0.82;
-    const r=Math.random()*7+2, px=Math.random()*s, py=Math.random()*s, n=5+(Math.random()*3|0);
+  // Pebble-cement floor with three size classes (big chunks, medium, dust)
+  // and a broader palette so it reads as real terrazzo at any distance.
+  const s = 1024, c = mkCanvas(s), x = c.getContext('2d');
+  // matrix (cementlike)
+  x.fillStyle = '#e2dfd8'; x.fillRect(0, 0, s, s);
+  // sparse dust speckles in the matrix
+  for(let i = 0; i < 8000; i++){
+    x.fillStyle = `rgba(120,118,112,${(Math.random()*0.15).toFixed(2)})`;
+    x.fillRect(Math.random()*s, Math.random()*s, 1, 1);
+  }
+  const palettes = ['#9aa0a6','#b9622f','#3b3f46','#c9c4ba','#7d8a6f',
+                    '#a89a86','#e2c66f','#d05a3a','#6b7585','#403a35'];
+  // big chunks (depth-sorted: drawn first under medium)
+  drawChips(x, s, 220, 8, 18, palettes, 0.92);
+  drawChips(x, s, 1200, 3, 9, palettes, 0.85);
+  // tiny grit
+  drawChips(x, s, 2200, 1.2, 3, palettes, 0.7);
+  return finishTex(c, 1.8);
+}
+function drawChips(x, s, count, rMin, rMax, palettes, alpha){
+  for(let i = 0; i < count; i++){
+    x.fillStyle = palettes[(Math.random()*palettes.length)|0];
+    x.globalAlpha = alpha * (0.85 + Math.random()*0.15);
+    const r = rMin + Math.random()*(rMax - rMin);
+    const cx = Math.random()*s, cy = Math.random()*s;
+    const n = 6 + (Math.random()*4|0);
+    const rot = Math.random() * 6.283;
     x.beginPath();
-    for(let k=0;k<n;k++){ const a=k/n*6.283, rr=r*(0.6+Math.random()*0.6);
-      const xx=px+Math.cos(a)*rr, yy=py+Math.sin(a)*rr; k?x.lineTo(xx,yy):x.moveTo(xx,yy); }
+    for(let k = 0; k < n; k++){
+      const a = rot + k/n*6.283;
+      const rr = r * (0.55 + Math.random()*0.5);
+      const xx = cx + Math.cos(a)*rr, yy = cy + Math.sin(a)*rr;
+      k ? x.lineTo(xx, yy) : x.moveTo(xx, yy);
+    }
     x.closePath(); x.fill();
   }
-  x.globalAlpha=1;
-  return finishTex(c, 1.6);
+  x.globalAlpha = 1;
 }
 function texNoise(base, tile, amp){
   const s=256, c=mkCanvas(s), x=c.getContext('2d');
@@ -1345,12 +1403,56 @@ function texFabric(base, tile){
   return finishTex(c, tile||0.7);
 }
 function texMarble(){
-  const s=512, c=mkCanvas(s), x=c.getContext('2d');
-  x.fillStyle='#ece9e3'; x.fillRect(0,0,s,s);
-  x.strokeStyle='rgba(150,150,150,0.22)'; x.lineWidth=1.2;
-  for(let i=0;i<42;i++){ x.beginPath(); let px=Math.random()*s, py=Math.random()*s; x.moveTo(px,py);
-    for(let k=0;k<6;k++){ px+=Math.random()*60-30; py+=Math.random()*60-30; x.lineTo(px,py); } x.stroke(); }
-  return finishTex(c, 2.0);
+  // Pale stone (Carrara-ish) with cracked vein structures. Each vein is a
+  // chain of organic segments fading to thin sub-veins → reads as natural
+  // marble rather than scribbled lines.
+  const s = 1024, c = mkCanvas(s), x = c.getContext('2d');
+  // base with extremely subtle tonal variation
+  const g = x.createLinearGradient(0, 0, s, s);
+  g.addColorStop(0, '#f0ede6');
+  g.addColorStop(0.5, '#eae6dd');
+  g.addColorStop(1, '#efece5');
+  x.fillStyle = g; x.fillRect(0, 0, s, s);
+  // pale wash blobs (cloud-like)
+  for(let i = 0; i < 14; i++){
+    const cx_ = Math.random()*s, cy_ = Math.random()*s, r = 60 + Math.random()*200;
+    const grd = x.createRadialGradient(cx_, cy_, 0, cx_, cy_, r);
+    grd.addColorStop(0, 'rgba(190,185,175,0.10)');
+    grd.addColorStop(1, 'rgba(190,185,175,0)');
+    x.fillStyle = grd; x.beginPath(); x.arc(cx_, cy_, r, 0, 6.283); x.fill();
+  }
+  // main veins: 4-7 elegant cracks crossing the slab
+  for(let v = 0; v < 5; v++){
+    let px = Math.random()*s, py = Math.random()*s;
+    let ang = Math.random()*6.283;
+    x.beginPath(); x.moveTo(px, py);
+    const segs = 20 + (Math.random()*14|0);
+    for(let k = 0; k < segs; k++){
+      ang += (Math.random() - 0.5) * 0.7;
+      const step = 25 + Math.random()*30;
+      px += Math.cos(ang)*step; py += Math.sin(ang)*step;
+      x.lineTo(px, py);
+    }
+    x.strokeStyle = `rgba(80,76,70,${0.18 + Math.random()*0.20})`;
+    x.lineWidth = 1.2 + Math.random()*1.4; x.stroke();
+    // a few thin branching sub-veins off the main crack
+    for(let j = 0; j < 4; j++){
+      x.beginPath();
+      const bx = px - Math.cos(ang) * (60 + Math.random()*200);
+      const by = py - Math.sin(ang) * (60 + Math.random()*200);
+      x.moveTo(bx, by);
+      let bang = ang + (Math.random()-0.5)*2.5;
+      let cx_=bx, cy_=by;
+      for(let k = 0; k < 6; k++){
+        bang += (Math.random()-0.5)*0.5;
+        cx_ += Math.cos(bang)*18; cy_ += Math.sin(bang)*18;
+        x.lineTo(cx_, cy_);
+      }
+      x.strokeStyle = `rgba(110,105,98,${0.08 + Math.random()*0.10})`;
+      x.lineWidth = 0.5 + Math.random()*0.7; x.stroke();
+    }
+  }
+  return finishTex(c, 2.4);
 }
 function texPerforated(){
   // White metal panel with dense, sharply-cut perforations and rim shadows
@@ -1712,8 +1814,9 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   scene.add(model);
   // Detect lightmap-equipped GLBs (those exported by bake_lightmap.py): they
   // carry a 2nd UV channel and an emissive texture that's actually the baked
-  // GI lightmap, not a glow map. We move it into the proper Three.js lightMap
-  // slot so it multiplies the base colour instead of adding light on top.
+  // (lightmap × base colour) result. For these, switch to MeshBasicMaterial:
+  // no realtime shading, the colour IS the pre-lit image. UV channel 1
+  // because the bake lives on TEXCOORD_1.
   const hasUV2 = (g) => g && g.attributes && g.attributes.uv1;
   let lightmapped = 0;
   model.traverse(o => {
@@ -1723,25 +1826,30 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
       const nm = m ? m.name : '';
       if(nm==='glass' || nm==='window') o.castShadow = false;
       if(nm==='lamp'){ o.castShadow=false; m.emissiveIntensity=1.4; }
-      // Promote baked emissive map (UV2) -> lightMap slot
+      // Pre-lit conversion for lightmap-baked meshes
       if(m && m.emissiveMap && hasUV2(o.geometry) && nm !== 'lamp' && nm !== 'art'){
-        m.lightMap = m.emissiveMap;
-        m.lightMapIntensity = 1.6;
-        m.emissive = new THREE.Color(0x000000);
-        m.emissiveMap = null;
-        m.needsUpdate = true;
+        const baked = m.emissiveMap;
+        baked.channel = 1;   // use TEXCOORD_1 (the lightmap UV)
+        baked.colorSpace = THREE.SRGBColorSpace;
+        const basic = new THREE.MeshBasicMaterial({
+          name: nm,
+          map: baked,
+          transparent: !!m.transparent,
+          alphaTest: m.alphaTest || 0,
+          side: m.side,
+        });
+        o.material = basic;
         lightmapped++;
       }
-      applyTexture(m);
+      applyTexture(o.material);
       (BUCKETS[layerOf(nm)] || BUCKETS.furniture).push(o);
     }
   });
   if(lightmapped){
-    console.log(`plan-to-3d: ${lightmapped} lightmapped meshes`);
-    // Lit GLB carries baked GI — dim runtime IBL & sun so we don't double-light.
-    scene.environmentIntensity = 0.12;
-    sun.intensity = 0.25;
-    fill.intensity = 0.1;
+    console.log(`plan-to-3d: ${lightmapped} pre-lit meshes (MeshBasic + lightmap)`);
+    // Pre-lit meshes are MeshBasic → already insensitive to runtime lights.
+    // The remaining PBR meshes (lamps, art, sprites) get a moderate boost so
+    // they sit in the same exposure range as the baked image.
     renderer.toneMappingExposure = 1.0;
   }
 
@@ -1771,32 +1879,58 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   FLOOR_Y = box.min.y;
   scene.fog = new THREE.Fog(SKY, radius*5, radius*18);
 
-  // Real lights at every glowing fixture, capped + shadowless to stay smooth
-  // on modest hardware. Downlights/pendants get SpotLights aimed DOWN (the
-  // signature light pools on the floor). Sconces/floor_lamps stay omni.
+  // Real lights at every glowing fixture, capped to stay smooth on modest
+  // hardware. Downlights/pendants get SpotLights aimed DOWN (the signature
+  // light pools on the floor). Sconces/floor_lamps stay omni.
+  // Shadows are EXPENSIVE: only the closest N fixtures cast them, the rest
+  // contribute light without writing to a shadow map.
   const LAMP_CAP = 36;
-  for(const o of BUCKETS.lights.slice(0, LAMP_CAP)){
+  const SHADOW_CAP = QUALITY === 'high' ? 8 : 0;
+  // Sort fixtures by distance to the camera focus so the most visually
+  // important ones get shadows.
+  const camFocus = controls.target.clone();
+  const sorted = BUCKETS.lights.slice(0, LAMP_CAP).map(o => {
     const p = new THREE.Vector3(); o.getWorldPosition(p);
-    const nm = (o.userData && o.userData.fixtureKind) ||
-               (o.parent && o.parent.userData && o.parent.userData.fixtureKind) || '';
-    // heuristic: a fixture near the ceiling acts as a downlight
+    return {o, p, d: p.distanceTo(camFocus)};
+  }).sort((a, b) => a.d - b.d);
+
+  for(let i = 0; i < sorted.length; i++){
+    const {o, p} = sorted[i];
     const downlight = p.y > FLOOR_Y + 2.2;
+    const wantsShadow = i < SHADOW_CAP;
     if(downlight){
-      // narrow cone aimed at the floor produces a crisp light disc — the
-      // signature of arch-viz downlights. Offset slightly below the fixture
-      // so the cone isn't blocked by the ceiling slab itself.
       const S = new THREE.SpotLight(0xffd9a0, 8.0, 6.0,
                                     Math.PI*0.22, 0.35, 1.6);
       S.position.set(p.x, p.y - 0.08, p.z);
       S.target.position.set(p.x, FLOOR_Y, p.z);
+      if(wantsShadow){
+        S.castShadow = true;
+        S.shadow.mapSize.set(1024, 1024);
+        S.shadow.bias = -0.0005;
+        S.shadow.normalBias = 0.02;
+        S.shadow.camera.near = 0.3;
+        S.shadow.camera.far = 8;
+        S.shadow.radius = 4;  // soft PCF
+      }
       scene.add(S); scene.add(S.target);
     } else {
       const L = new THREE.PointLight(0xffe7c0, 0.7, radius*0.9, 2.0);
-      L.position.copy(p); scene.add(L);
+      L.position.copy(p);
+      // Point lights with shadow maps use a cube map → 6× cost. Skip unless
+      // the fixture is in the SHADOW_CAP slot AND is a sconce or floor lamp.
+      if(wantsShadow){
+        L.castShadow = true;
+        L.shadow.mapSize.set(512, 512);
+        L.shadow.bias = -0.0008;
+        L.shadow.radius = 3;
+      }
+      scene.add(L);
     }
   }
   if(BUCKETS.lights.length > LAMP_CAP)
     console.log('plan-to-3d: '+BUCKETS.lights.length+' fixtures, lit '+LAMP_CAP+' (perf cap)');
+  if(SHADOW_CAP > 0)
+    console.log('plan-to-3d: '+Math.min(SHADOW_CAP, sorted.length)+' fixtures casting shadows');
 
   // Entourage figures
   for(const p of PEOPLE){

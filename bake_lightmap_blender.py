@@ -93,10 +93,36 @@ def add_environment(strength=0.4):
 def add_sun(angle_deg=40):
     bpy.ops.object.light_add(type='SUN')
     sun = bpy.context.object
-    sun.data.energy = 3.0
+    sun.data.energy = 6.0
     sun.data.angle = math.radians(2.5)
     sun.rotation_euler = (math.radians(angle_deg), 0, math.radians(35))
     return sun
+
+
+def add_fill_areas(meshes):
+    """A big skylight just above the ceiling so every face of every mesh
+    receives at least some indirect light, otherwise back walls and plant
+    interiors bake to near-black in the lightmap."""
+    if not meshes:
+        return
+    minp = mathutils.Vector(( 1e9,  1e9,  1e9))
+    maxp = mathutils.Vector((-1e9, -1e9, -1e9))
+    for o in meshes:
+        for v in o.bound_box:
+            wv = o.matrix_world @ mathutils.Vector(v)
+            minp = mathutils.Vector(map(min, minp, wv))
+            maxp = mathutils.Vector(map(max, maxp, wv))
+    cx, cy = (minp.x+maxp.x)/2, (minp.y+maxp.y)/2
+    sx, sy = (maxp.x-minp.x), (maxp.y-minp.y)
+    bpy.ops.object.light_add(type='AREA')
+    L = bpy.context.object
+    L.data.energy = 800
+    L.data.shape = 'RECTANGLE'
+    L.data.size = sx * 0.9
+    L.data.size_y = sy * 0.9
+    L.data.color = (1.0, 0.98, 0.95)
+    L.location = (cx, cy, maxp.z + 0.5)
+    L.rotation_euler = (0, 0, 0)
 
 
 def add_fixtures(spec):
@@ -200,10 +226,12 @@ def bake_lightmap(obj, img):
 
 
 def attach_lightmap_to_materials(obj, img):
-    """Wire the baked image as an emission overlay so the GLB exporter can
-    pick it up. Practically: feed lightmap as 'Emission Color' (or via the
-    KHR_materials_emissive_strength + emissive texture). The viewer then
-    sees a pre-lit baked colour even without runtime lights."""
+    """Wire `base_colour × lightmap` into the BSDF's Emission so the glTF
+    exporter packages it as emissiveTexture (UV2). The viewer then promotes
+    that emissiveTexture to the colour map of a MeshBasicMaterial → fully
+    pre-lit, no realtime shading required.
+
+    Handles both base-colour-as-texture and base-colour-as-flat-RGBA."""
     for slot in obj.material_slots:
         m = slot.material
         if m is None or not m.use_nodes:
@@ -212,8 +240,10 @@ def attach_lightmap_to_materials(obj, img):
         bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
         if bsdf is None:
             continue
-        # Build: texImage(lightmap, UV='Lightmap') -> Emission Color (multiplied
-        # by base colour). Then disable existing 'Emission Strength' bump.
+        # 1) Read the current base colour: either a texture or an RGBA value
+        bc = bsdf.inputs['Base Color']
+        # 2) Add the lightmap texture node (Linear so it stays unmolested by
+        #    sRGB conversion when used as a multiplier).
         lm = nt.nodes.new('ShaderNodeTexImage')
         lm.image = img
         lm.image.colorspace_settings.name = 'Linear Rec.709'
@@ -221,20 +251,22 @@ def attach_lightmap_to_materials(obj, img):
         uv = nt.nodes.new('ShaderNodeUVMap')
         uv.uv_map = 'Lightmap'
         nt.links.new(uv.outputs['UV'], lm.inputs['Vector'])
-        # Multiply lightmap with base colour to keep texture detail
-        bc = bsdf.inputs['Base Color']
+        # 3) Multiply baseColour × lightmap → Emission Color.
+        mul = nt.nodes.new('ShaderNodeMix')
+        mul.data_type = 'RGBA'
+        mul.blend_type = 'MULTIPLY'
+        mul.inputs['Factor'].default_value = 1.0
         if bc.is_linked:
-            base_src = bc.links[0].from_node
-            base_src_out = bc.links[0].from_socket
-            mul = nt.nodes.new('ShaderNodeMix')
-            mul.data_type = 'RGBA'
-            mul.blend_type = 'MULTIPLY'
-            mul.inputs['Factor'].default_value = 1.0
-            nt.links.new(base_src_out, mul.inputs[6])  # A
-            nt.links.new(lm.outputs['Color'], mul.inputs[7])  # B
-            nt.links.new(mul.outputs[2], bsdf.inputs['Emission Color'])
+            # texture-backed base colour
+            nt.links.new(bc.links[0].from_socket, mul.inputs[6])  # A
         else:
-            nt.links.new(lm.outputs['Color'], bsdf.inputs['Emission Color'])
+            # FLAT base colour: drive the A input with an RGB node so the
+            # multiply actually sees the green / wood / metal tint.
+            rgb = nt.nodes.new('ShaderNodeRGB')
+            rgb.outputs[0].default_value = tuple(bc.default_value)
+            nt.links.new(rgb.outputs[0], mul.inputs[6])
+        nt.links.new(lm.outputs['Color'], mul.inputs[7])  # B
+        nt.links.new(mul.outputs[2], bsdf.inputs['Emission Color'])
         bsdf.inputs['Emission Strength'].default_value = 1.0
 
 
@@ -246,8 +278,9 @@ def main():
     configure_cycles(args.samples)
     meshes = load_glb(args.glb)
     print(f"[lmap] imported {len(meshes)} meshes")
-    add_environment(strength=0.4)
+    add_environment(strength=1.6)
     add_sun()
+    add_fill_areas(meshes)
     add_fixtures(spec)
 
     # 1) Per-mesh UV2 unwrap + bake into a per-mesh lightmap image
