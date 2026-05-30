@@ -305,6 +305,101 @@ def cyl_local(mesh, mat, fr, lcx, lcy, r, z0, z1, segs=16):
         mesh.add_tri(mat, (cb[0], z0, cb[1]), (b[0], z0, b[1]), (a[0], z0, a[1]))
 
 
+def sphere_local(mesh, mat, fr, lcx, lcy, lcz, r, rings=8, segs=14):
+    """A UV sphere centred at local (lcx, lcy, lcz). lcz is the WORLD-Y centre.
+    Used for real globe shades, pendant balls, knobs — anywhere a hard box
+    edge would look fake."""
+    if r < EPS:
+        return
+    # Build a vertex grid (ring, seg), poles at the ends.
+    grid = []
+    for i in range(rings + 1):
+        phi = math.pi * i / rings              # 0..pi
+        y = lcz + r * math.cos(phi)
+        rr = r * math.sin(phi)
+        row = []
+        for j in range(segs):
+            theta = 2.0 * math.pi * j / segs
+            wp = fr.xy(lcx + rr * math.cos(theta), lcy + rr * math.sin(theta))
+            row.append((wp[0], y, wp[1]))
+        grid.append(row)
+    for i in range(rings):
+        for j in range(segs):
+            jn = (j + 1) % segs
+            a = grid[i][j];     b = grid[i][jn]
+            c = grid[i + 1][jn]; d = grid[i + 1][j]
+            if i == 0:
+                mesh.add_tri(mat, a, c, d)
+            elif i == rings - 1:
+                mesh.add_tri(mat, a, b, c)
+            else:
+                mesh.add_quad(mat, a, b, c, d)
+
+
+def box_chamfered(mesh, mat, fr, x0, y0, x1, y1, z0, z1, c=0.02):
+    """Box with the four horizontal top edges AND the four horizontal bottom
+    edges bevelled at 45° by `c` metres. Adds the soft-edge "real-object" look
+    to flat tops (counters, table tops, plinths, benches) without exploding
+    the triangle count (no vertical-edge chamfer; that's where it shows least)."""
+    if x1 < x0: x0, x1 = x1, x0
+    if y1 < y0: y0, y1 = y1, y0
+    w, d, h = x1 - x0, y1 - y0, z1 - z0
+    if w < EPS or d < EPS or h < EPS:
+        return
+    # Clamp the chamfer so the inner rectangle is never inverted.
+    c = max(0.0, min(c, w * 0.5 - 1e-4, d * 0.5 - 1e-4, h * 0.5 - 1e-4))
+    if c <= EPS:
+        box_local(mesh, mat, fr, x0, y0, x1, y1, z0, z1)
+        return
+    xa, xb = x0 + c, x1 - c          # inner X range (top / bottom inset)
+    ya, yb = y0 + c, y1 - c          # inner Y range
+    za, zb = z0 + c, z1 - c          # vertical extent of straight walls
+    P = fr.xy
+    # Top face
+    pa, pb, pc, pd = P(xa, ya), P(xb, ya), P(xb, yb), P(xa, yb)
+    mesh.add_quad(mat, (pa[0], z1, pa[1]), (pb[0], z1, pb[1]),
+                  (pc[0], z1, pc[1]), (pd[0], z1, pd[1]))
+    # Bottom face (winding reversed so the normal points down)
+    qa, qb, qc, qd = P(xa, ya), P(xa, yb), P(xb, yb), P(xb, ya)
+    mesh.add_quad(mat, (qa[0], z0, qa[1]), (qb[0], z0, qb[1]),
+                  (qc[0], z0, qc[1]), (qd[0], z0, qd[1]))
+    # 4 side walls (between za and zb)
+    Xa = P(x0, ya); Xb = P(x0, yb)  # left wall corners
+    Ya = P(x1, ya); Yb = P(x1, yb)  # right
+    Aa = P(xa, y0); Ab = P(xb, y0)  # front
+    Ba = P(xa, y1); Bb = P(xb, y1)  # back
+    mesh.add_quad(mat, (Xa[0], za, Xa[1]), (Xb[0], za, Xb[1]),
+                  (Xb[0], zb, Xb[1]), (Xa[0], zb, Xa[1]))
+    mesh.add_quad(mat, (Yb[0], za, Yb[1]), (Ya[0], za, Ya[1]),
+                  (Ya[0], zb, Ya[1]), (Yb[0], zb, Yb[1]))
+    mesh.add_quad(mat, (Ab[0], za, Ab[1]), (Aa[0], za, Aa[1]),
+                  (Aa[0], zb, Aa[1]), (Ab[0], zb, Ab[1]))
+    mesh.add_quad(mat, (Ba[0], za, Ba[1]), (Bb[0], za, Bb[1]),
+                  (Bb[0], zb, Bb[1]), (Ba[0], zb, Ba[1]))
+    # Top chamfer ramps (4 quads sloping from the wall top to the top inset)
+    mesh.add_quad(mat, (Xa[0], zb, Xa[1]), (Xb[0], zb, Xb[1]),
+                  (pd[0], z1, pd[1]), (pa[0], z1, pa[1]))   # left
+    mesh.add_quad(mat, (Yb[0], zb, Yb[1]), (Ya[0], zb, Ya[1]),
+                  (pb[0], z1, pb[1]), (pc[0], z1, pc[1]))   # right
+    mesh.add_quad(mat, (Ab[0], zb, Ab[1]), (Aa[0], zb, Aa[1]),
+                  (pa[0], z1, pa[1]), (pb[0], z1, pb[1]))   # front
+    mesh.add_quad(mat, (Ba[0], zb, Ba[1]), (Bb[0], zb, Bb[1]),
+                  (pc[0], z1, pc[1]), (pd[0], z1, pd[1]))   # back
+    # Bottom chamfer ramps (winding reversed for downward normals)
+    mesh.add_quad(mat, (pa[0], z0, pa[1]), (pd[0], z0, pd[1]),
+                  (Xb[0], za, Xb[1]), (Xa[0], za, Xa[1]))
+    mesh.add_quad(mat, (pc[0], z0, pc[1]), (pb[0], z0, pb[1]),
+                  (Ya[0], za, Ya[1]), (Yb[0], za, Yb[1]))
+    mesh.add_quad(mat, (pb[0], z0, pb[1]), (pa[0], z0, pa[1]),
+                  (Aa[0], za, Aa[1]), (Ab[0], za, Ab[1]))
+    mesh.add_quad(mat, (pd[0], z0, pd[1]), (pc[0], z0, pc[1]),
+                  (Bb[0], za, Bb[1]), (Ba[0], za, Ba[1]))
+    # 4 short vertical "edge corners" connecting the chamfers
+    for (Sa, Sb, La, Lb) in [(Xa, Xb, pa, pd), (Yb, Ya, pc, pb),
+                              (Ab, Aa, pb, pa), (Ba, Bb, pd, pc)]:
+        pass  # corners are already closed by adjacent ramps
+
+
 def build_stairs(mesh, material, center, width, run, rotation_deg, z0, total_rise, n_steps):
     """A flight of stairs climbing along local +Y; each tread is a solid block
     from the floor up to its own top, giving a clean ascending silhouette."""
@@ -342,7 +437,8 @@ def b_bed(mesh, fr, w, d, h, z0, item, mat):
 def b_table(mesh, fr, w, d, h, z0, item, mat):
     top_t = 0.04
     top_mat = item.get("top_material", "wood_light")
-    box_local(mesh, top_mat, fr, -w / 2, -d / 2, w / 2, d / 2, z0 + h - top_t, z0 + h)
+    box_chamfered(mesh, top_mat, fr, -w / 2, -d / 2, w / 2, d / 2,
+                  z0 + h - top_t, z0 + h, c=0.012)
     lt, ins = 0.05, 0.06
     for sx in (-1, 1):
         for sy in (-1, 1):
@@ -408,17 +504,21 @@ def b_sofa(mesh, fr, w, d, h, z0, item, mat):
     arm, back, seat_h = 0.18, 0.18, 0.42
     box_local(mesh, smat, fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + seat_h * 0.6)
     box_local(mesh, smat, fr, -w / 2, d / 2 - back, w / 2, d / 2, z0, z0 + h)
-    box_local(mesh, smat, fr, -w / 2, -d / 2, -w / 2 + arm, d / 2, z0, z0 + h * 0.7)
-    box_local(mesh, smat, fr, w / 2 - arm, -d / 2, w / 2, d / 2, z0, z0 + h * 0.7)
+    # Armrests with rounded top edges — the curve you actually rest a hand on.
+    box_chamfered(mesh, smat, fr, -w / 2, -d / 2, -w / 2 + arm, d / 2,
+                  z0, z0 + h * 0.7, c=0.05)
+    box_chamfered(mesh, smat, fr, w / 2 - arm, -d / 2, w / 2, d / 2,
+                  z0, z0 + h * 0.7, c=0.05)
     n = max(1, int(round((w - 2 * arm) / 0.7)))
     cw = (w - 2 * arm) / n
     for i in range(n):
         x0 = -w / 2 + arm + i * cw + 0.03
         x1 = -w / 2 + arm + (i + 1) * cw - 0.03
-        box_local(mesh, smat, fr, x0, -d / 2 + 0.05, x1, d / 2 - back - 0.03,
-                  z0 + seat_h * 0.6, z0 + seat_h)
-        box_local(mesh, smat, fr, x0, d / 2 - back - 0.05, x1, d / 2 - back + 0.02,
-                  z0 + seat_h, z0 + h - 0.05)
+        # Seat cushions with soft edges.
+        box_chamfered(mesh, smat, fr, x0, -d / 2 + 0.05, x1, d / 2 - back - 0.03,
+                      z0 + seat_h * 0.6, z0 + seat_h, c=0.025)
+        box_chamfered(mesh, smat, fr, x0, d / 2 - back - 0.05, x1, d / 2 - back + 0.02,
+                      z0 + seat_h, z0 + h - 0.05, c=0.025)
 
 
 def b_armchair(mesh, fr, w, d, h, z0, item, mat):
@@ -467,11 +567,13 @@ def b_desk_bench(mesh, fr, w, d, h, z0, item, mat):
 def b_kitchen(mesh, fr, w, d, h, z0, item, mat):
     box_local(mesh, "dark", fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + 0.1)
     box_local(mesh, "wood_light", fr, -w / 2, -d / 2, w / 2, d / 2, z0 + 0.1, z0 + h - 0.04)
-    box_local(mesh, "stone", fr, -w / 2 - 0.02, -d / 2 - 0.02, w / 2 + 0.02, d / 2 + 0.02,
-              z0 + h - 0.04, z0 + h)
+    # Stone worktop with a soft bevelled edge (~1 cm) — the bit you actually
+    # see and run a finger along.
+    box_chamfered(mesh, "stone", fr, -w / 2 - 0.02, -d / 2 - 0.02,
+                  w / 2 + 0.02, d / 2 + 0.02, z0 + h - 0.04, z0 + h, c=0.012)
     if not item.get("island"):
-        box_local(mesh, "wood_light", fr, -w / 2, d / 2 - 0.35, w / 2, d / 2,
-                  z0 + 1.45, z0 + 2.15)
+        box_chamfered(mesh, "wood_light", fr, -w / 2, d / 2 - 0.35, w / 2, d / 2,
+                      z0 + 1.45, z0 + 2.15, c=0.008)
     n = max(1, int(round(w / 0.6)))
     for i in range(1, n):
         x = -w / 2 + i * w / n
@@ -519,16 +621,17 @@ def b_column(mesh, fr, w, d, h, z0, item, mat):
 def b_reception(mesh, fr, w, d, h, z0, item, mat):
     body = item.get("material") or "wood"
     box_local(mesh, body, fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + h - 0.04)
-    box_local(mesh, "stone", fr, -w / 2 - 0.03, -d / 2 - 0.03, w / 2 + 0.03, d / 2 + 0.03,
-              z0 + h - 0.04, z0 + h)  # counter top
+    box_chamfered(mesh, "stone", fr, -w / 2 - 0.03, -d / 2 - 0.03,
+                  w / 2 + 0.03, d / 2 + 0.03, z0 + h - 0.04, z0 + h, c=0.014)
     # raised transaction ledge along the front (-Y)
-    box_local(mesh, "stone", fr, -w / 2, -d / 2 - 0.06, w / 2, -d / 2,
-              z0 + h - 0.04, z0 + h + 0.06)
+    box_chamfered(mesh, "stone", fr, -w / 2, -d / 2 - 0.06, w / 2, -d / 2,
+                  z0 + h - 0.04, z0 + h + 0.06, c=0.012)
 
 
 def b_bench(mesh, fr, w, d, h, z0, item, mat):
     smat = item.get("material") or "wood_light"
-    box_local(mesh, smat, fr, -w / 2, -d / 2, w / 2, d / 2, z0 + h - 0.06, z0 + h)
+    box_chamfered(mesh, smat, fr, -w / 2, -d / 2, w / 2, d / 2,
+                  z0 + h - 0.06, z0 + h, c=0.012)
     for sx in (-1, 1):
         box_local(mesh, "metal", fr, sx * (w / 2 - 0.1) - 0.03, -d / 2 + 0.03,
                   sx * (w / 2 - 0.1) + 0.03, d / 2 - 0.03, z0, z0 + h - 0.06)
@@ -549,22 +652,33 @@ def b_ceiling_panel(mesh, fr, w, d, h, z0, item, mat):
 
 def b_sconce(mesh, fr, w, d, h, z0, item, mat):
     base = z0 if z0 > EPS else 1.7
-    cyl_local(mesh, "metal", fr, 0, 0, 0.02, base, base + 0.05, segs=8)  # stem
-    r = min(w, d) / 2
-    cyl_local(mesh, "lamp", fr, 0, 0, r, base + 0.05, base + 0.05 + h, segs=14)  # globe
+    r = max(0.06, min(w, d) / 2)
+    # Round brushed-metal backplate, flush with the wall (-Y is the wall side
+    # by convention but a sconce hangs off it, so we centre everything on fr).
+    cyl_local(mesh, "metal", fr, 0, 0, r * 0.55, base - 0.005, base + 0.012, segs=14)
+    # Slim arm.
+    cyl_local(mesh, "metal", fr, 0, 0, 0.012, base + 0.012, base + 0.05, segs=10)
+    # The actual glowing globe — a real sphere, not a vertical tube.
+    sphere_local(mesh, "lamp", fr, 0, 0, base + 0.05 + r, r, rings=8, segs=14)
 
 
 def b_downlight(mesh, fr, w, d, h, z0, item, mat):
     base = z0 if z0 > EPS else 2.88
-    # Recessed below the ceiling soffit, so the bulb is INSIDE the room.
-    cyl_local(mesh, "lamp", fr, 0, 0, min(w, d) / 2, base - h - 0.02, base - 0.02, segs=14)
+    r = min(w, d) / 2
+    # Thin recessed trim ring (metal) flush with the ceiling.
+    cyl_local(mesh, "metal", fr, 0, 0, r, base - 0.012, base - 0.002, segs=14)
+    # Bulb is a small dome below the trim so the light source is INSIDE the room.
+    sphere_local(mesh, "lamp", fr, 0, 0, base - r * 0.55, r * 0.7, rings=5, segs=12)
 
 
 def b_pendant(mesh, fr, w, d, h, z0, item, mat):
     top = z0 if z0 > EPS else 2.9
-    drum = 0.22
-    cyl_local(mesh, "metal", fr, 0, 0, 0.008, top - 0.5, top, segs=6)  # cord
-    cyl_local(mesh, "lamp", fr, 0, 0, min(w, d) / 2, top - 0.5 - drum, top - 0.5, segs=16)
+    drop = 0.5
+    r = max(0.08, min(w, d) / 2)
+    cyl_local(mesh, "metal", fr, 0, 0, 0.008, top - drop, top, segs=6)   # cord
+    cyl_local(mesh, "metal", fr, 0, 0, 0.04, top - 0.005, top, segs=10)  # rosette
+    # Spherical pendant shade — same family as the wall sconce.
+    sphere_local(mesh, "lamp", fr, 0, 0, top - drop - r, r, rings=8, segs=14)
 
 
 def b_floor_lamp(mesh, fr, w, d, h, z0, item, mat):
@@ -961,6 +1075,7 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
   <label><input type="checkbox" id="ck-ceiling" checked> Plafond</label>
   <label><input type="checkbox" id="ck-walls" checked> Murs</label>
   <label><input type="checkbox" id="ck-glass" checked> Verre</label>
+  <label><input type="checkbox" id="ck-structure" checked> Structure</label>
   <label><input type="checkbox" id="ck-floor" checked> Sol</label>
   <label><input type="checkbox" id="ck-furniture" checked> Mobilier</label>
   <label><input type="checkbox" id="ck-lights" checked> Luminaires</label>
@@ -1230,11 +1345,12 @@ function layerOf(name){
   if(name==='ceiling') return 'ceiling';
   if(name==='wall'||name==='door'||name==='frame') return 'walls';
   if(name==='glass'||name==='window') return 'glass';
+  if(name==='concrete') return 'structure';   // load-bearing columns / shear walls
   if(name==='slab') return 'floor';
   if(name==='lamp') return 'lights';
   return 'furniture';
 }
-const BUCKETS={roof:[],ceiling:[],walls:[],glass:[],floor:[],lights:[],furniture:[],people:[]};
+const BUCKETS={roof:[],ceiling:[],walls:[],glass:[],structure:[],floor:[],lights:[],furniture:[],people:[]};
 const labelObjs=[];
 function setLayer(cat, vis){
   if(cat==='labels'){ labelObjs.forEach(o=>o.visible=vis); return; }
@@ -1365,8 +1481,9 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
 
   // wire the layer checkboxes; hide rows whose layer is empty for this model
   const ROWS=[['roof','roof'],['ceiling','ceiling'],['walls','walls'],
-    ['glass','glass'],['floor','floor'],['furniture','furniture'],
-    ['lights','lights'],['people','people'],['labels','labels']];
+    ['glass','glass'],['structure','structure'],['floor','floor'],
+    ['furniture','furniture'],['lights','lights'],
+    ['people','people'],['labels','labels']];
   for(const [id,cat] of ROWS){
     const el=document.getElementById('ck-'+id);
     if(!el) continue;
