@@ -1637,16 +1637,40 @@ const loader = new GLTFLoader();
 loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   const model = gltf.scene; MODEL = model;
   scene.add(model);
+  // Detect lightmap-equipped GLBs (those exported by bake_lightmap.py): they
+  // carry a 2nd UV channel and an emissive texture that's actually the baked
+  // GI lightmap, not a glow map. We move it into the proper Three.js lightMap
+  // slot so it multiplies the base colour instead of adding light on top.
+  const hasUV2 = (g) => g && g.attributes && g.attributes.uv1;
+  let lightmapped = 0;
   model.traverse(o => {
     if(o.isMesh){
       o.castShadow = true; o.receiveShadow = true;
-      const nm = o.material ? o.material.name : '';
-      if(nm==='glass' || nm==='window') o.castShadow = false;  // no heavy shadows
-      if(nm==='lamp'){ o.castShadow=false; o.material.emissiveIntensity=1.4; }
-      applyTexture(o.material);
+      const m = o.material;
+      const nm = m ? m.name : '';
+      if(nm==='glass' || nm==='window') o.castShadow = false;
+      if(nm==='lamp'){ o.castShadow=false; m.emissiveIntensity=1.4; }
+      // Promote baked emissive map (UV2) -> lightMap slot
+      if(m && m.emissiveMap && hasUV2(o.geometry) && nm !== 'lamp' && nm !== 'art'){
+        m.lightMap = m.emissiveMap;
+        m.lightMapIntensity = 1.6;
+        m.emissive = new THREE.Color(0x000000);
+        m.emissiveMap = null;
+        m.needsUpdate = true;
+        lightmapped++;
+      }
+      applyTexture(m);
       (BUCKETS[layerOf(nm)] || BUCKETS.furniture).push(o);
     }
   });
+  if(lightmapped){
+    console.log(`plan-to-3d: ${lightmapped} lightmapped meshes`);
+    // Lit GLB carries baked GI — dim runtime IBL & sun so we don't double-light.
+    scene.environmentIntensity = 0.12;
+    sun.intensity = 0.25;
+    fill.intensity = 0.1;
+    renderer.toneMappingExposure = 1.0;
+  }
 
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
