@@ -7,8 +7,9 @@
 > - ✅ Étape 1 — UV dans le GLB + textures procédurales (bois, terrazzo, marbre, plâtre, tissu, art abstrait)
 > - ✅ Étape 2 — luminaires (sconce/downlight/pendant/floor_lamp), spots dirigés vers le sol pour les downlights (cône qui dessine une flaque), bloom UnrealBloomPass avec auto-détection perf (off sur petit matériel)
 > - ✅ Étape 3 — caméra Visite (hauteur d'œil) + déplacement ZQSD/WASD/flèches
-> - ✅ Étape 4 (partiel) — entourage (silhouettes-billboards procédurales) — reste : image d'art fournie + plafond métal perforé (texture alpha)
-> - ➕ Bonus : finition de mur (`finish`), comptoir d'accueil, banc, tableau encadré, plafond, exemple `lobby.json`, calibrage exposure/IBL pour contraste sculpté
+> - ✅ Étape 4 — entourage (silhouettes-billboards procédurales), plafond métal perforé (texture alpha avec trous) ; reste : image d'art fournie par utilisateur
+> - ✅ Étape 5B (alternative simplifiée) — bouton **« 📸 Rendu photo »** opt-in : rendu studio 1920×1080 super-sampling 4× + shadow map 4096 + bloom, **sans dépendance externe** (path tracer GPU abandonné car trop fragile vs versions). Téléchargement PNG. Vrai GI (5A lightmaps) reste à faire.
+> - ➕ Bonus : arêtes verticales chanfreinées (box_chamfered 12 arêtes), finition de mur (`finish`), comptoir d'accueil, banc, tableau encadré, plafond perforé, calque **Structure** séparé, **sconces murales** correctes (platine + bras + globe), exemple `lobby.json`, calibrage exposure/IBL
 > - ⬜ Étape 5 — photoréaliste côté créateur : 5A lightmaps cuits / 5B stills Blender
 > - ⬜ Étape 6 — paliers de perf, hors-ligne total, replis WebGL2
 

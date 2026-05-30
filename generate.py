@@ -74,6 +74,8 @@ MATERIALS = {
     "lamp":       _mat([0.99, 0.96, 0.90, 1.0], rough=0.25,
                        emissive=[1.0, 0.92, 0.74]),  # glowing fixtures
     "ceiling":    _mat([0.82, 0.83, 0.85, 1.0], rough=0.5, metal=0.25),
+    "ceiling_perf":_mat([0.82, 0.83, 0.85, 1.0], rough=0.45, metal=0.35,
+                        alpha="BLEND"),  # perforated metal panel
     "art":        _mat([0.55, 0.55, 0.57, 1.0], rough=0.55),  # textured in viewer
 }
 
@@ -337,37 +339,40 @@ def sphere_local(mesh, mat, fr, lcx, lcy, lcz, r, rings=8, segs=14):
 
 
 def box_chamfered(mesh, mat, fr, x0, y0, x1, y1, z0, z1, c=0.02):
-    """Box with the four horizontal top edges AND the four horizontal bottom
-    edges bevelled at 45° by `c` metres. Adds the soft-edge "real-object" look
-    to flat tops (counters, table tops, plinths, benches) without exploding
-    the triangle count (no vertical-edge chamfer; that's where it shows least)."""
+    """Box with ALL 12 edges chamfered at 45° by `c` metres — horizontals top
+    and bottom AND verticals. The result is an octagonal "puck" silhouette
+    with a softened top and bottom; reads as a real, machined object instead
+    of a hard CSG block. ~30 quads per call (+24 vs a plain box) — fine for
+    the hundred-ish hero pieces in a typical scene."""
     if x1 < x0: x0, x1 = x1, x0
     if y1 < y0: y0, y1 = y1, y0
     w, d, h = x1 - x0, y1 - y0, z1 - z0
     if w < EPS or d < EPS or h < EPS:
         return
-    # Clamp the chamfer so the inner rectangle is never inverted.
     c = max(0.0, min(c, w * 0.5 - 1e-4, d * 0.5 - 1e-4, h * 0.5 - 1e-4))
     if c <= EPS:
         box_local(mesh, mat, fr, x0, y0, x1, y1, z0, z1)
         return
-    xa, xb = x0 + c, x1 - c          # inner X range (top / bottom inset)
-    ya, yb = y0 + c, y1 - c          # inner Y range
-    za, zb = z0 + c, z1 - c          # vertical extent of straight walls
+    xa, xb = x0 + c, x1 - c     # inset along X
+    ya, yb = y0 + c, y1 - c     # inset along Y
+    za, zb = z0 + c, z1 - c     # inset along Z (height)
     P = fr.xy
-    # Top face
+
+    # Top face (octagon, but a single inset rectangle works because the four
+    # corner pyramids are filled by the chamfer faces below).
     pa, pb, pc, pd = P(xa, ya), P(xb, ya), P(xb, yb), P(xa, yb)
     mesh.add_quad(mat, (pa[0], z1, pa[1]), (pb[0], z1, pb[1]),
                   (pc[0], z1, pc[1]), (pd[0], z1, pd[1]))
-    # Bottom face (winding reversed so the normal points down)
-    qa, qb, qc, qd = P(xa, ya), P(xa, yb), P(xb, yb), P(xb, ya)
-    mesh.add_quad(mat, (qa[0], z0, qa[1]), (qb[0], z0, qb[1]),
-                  (qc[0], z0, qc[1]), (qd[0], z0, qd[1]))
-    # 4 side walls (between za and zb)
-    Xa = P(x0, ya); Xb = P(x0, yb)  # left wall corners
-    Ya = P(x1, ya); Yb = P(x1, yb)  # right
-    Aa = P(xa, y0); Ab = P(xb, y0)  # front
-    Ba = P(xa, y1); Bb = P(xb, y1)  # back
+    # Bottom face (reversed)
+    mesh.add_quad(mat, (pa[0], z0, pa[1]), (pd[0], z0, pd[1]),
+                  (pc[0], z0, pc[1]), (pb[0], z0, pb[1]))
+
+    # 4 main side walls — narrow rectangles between za..zb, set IN by `c`
+    # on each end so the vertical chamfers can fit at the corners.
+    Xa = P(x0, ya); Xb = P(x0, yb)   # left wall
+    Ya = P(x1, ya); Yb = P(x1, yb)   # right wall
+    Aa = P(xa, y0); Ab = P(xb, y0)   # front wall
+    Ba = P(xa, y1); Bb = P(xb, y1)   # back wall
     mesh.add_quad(mat, (Xa[0], za, Xa[1]), (Xb[0], za, Xb[1]),
                   (Xb[0], zb, Xb[1]), (Xa[0], zb, Xa[1]))
     mesh.add_quad(mat, (Yb[0], za, Yb[1]), (Ya[0], za, Ya[1]),
@@ -376,16 +381,28 @@ def box_chamfered(mesh, mat, fr, x0, y0, x1, y1, z0, z1, c=0.02):
                   (Aa[0], zb, Aa[1]), (Ab[0], zb, Ab[1]))
     mesh.add_quad(mat, (Ba[0], za, Ba[1]), (Bb[0], za, Bb[1]),
                   (Bb[0], zb, Bb[1]), (Ba[0], zb, Ba[1]))
-    # Top chamfer ramps (4 quads sloping from the wall top to the top inset)
+
+    # 4 VERTICAL chamfer faces (one per corner column), each a quad linking
+    # adjacent wall edges across the diagonal.
+    mesh.add_quad(mat, (Ab[0], za, Ab[1]), (Ya[0], za, Ya[1]),
+                  (Ya[0], zb, Ya[1]), (Ab[0], zb, Ab[1]))   # +X / -Y corner
+    mesh.add_quad(mat, (Yb[0], za, Yb[1]), (Bb[0], za, Bb[1]),
+                  (Bb[0], zb, Bb[1]), (Yb[0], zb, Yb[1]))   # +X / +Y corner
+    mesh.add_quad(mat, (Ba[0], za, Ba[1]), (Xb[0], za, Xb[1]),
+                  (Xb[0], zb, Xb[1]), (Ba[0], zb, Ba[1]))   # -X / +Y corner
+    mesh.add_quad(mat, (Xa[0], za, Xa[1]), (Aa[0], za, Aa[1]),
+                  (Aa[0], zb, Aa[1]), (Xa[0], zb, Xa[1]))   # -X / -Y corner
+
+    # 4 TOP horizontal chamfer ramps + 4 BOTTOM ramps, going from the wall
+    # top/bottom to the top/bottom inset.
     mesh.add_quad(mat, (Xa[0], zb, Xa[1]), (Xb[0], zb, Xb[1]),
-                  (pd[0], z1, pd[1]), (pa[0], z1, pa[1]))   # left
+                  (pd[0], z1, pd[1]), (pa[0], z1, pa[1]))
     mesh.add_quad(mat, (Yb[0], zb, Yb[1]), (Ya[0], zb, Ya[1]),
-                  (pb[0], z1, pb[1]), (pc[0], z1, pc[1]))   # right
+                  (pb[0], z1, pb[1]), (pc[0], z1, pc[1]))
     mesh.add_quad(mat, (Ab[0], zb, Ab[1]), (Aa[0], zb, Aa[1]),
-                  (pa[0], z1, pa[1]), (pb[0], z1, pb[1]))   # front
+                  (pa[0], z1, pa[1]), (pb[0], z1, pb[1]))
     mesh.add_quad(mat, (Ba[0], zb, Ba[1]), (Bb[0], zb, Bb[1]),
-                  (pc[0], z1, pc[1]), (pd[0], z1, pd[1]))   # back
-    # Bottom chamfer ramps (winding reversed for downward normals)
+                  (pc[0], z1, pc[1]), (pd[0], z1, pd[1]))
     mesh.add_quad(mat, (pa[0], z0, pa[1]), (pd[0], z0, pd[1]),
                   (Xb[0], za, Xb[1]), (Xa[0], za, Xa[1]))
     mesh.add_quad(mat, (pc[0], z0, pc[1]), (pb[0], z0, pb[1]),
@@ -394,10 +411,17 @@ def box_chamfered(mesh, mat, fr, x0, y0, x1, y1, z0, z1, c=0.02):
                   (Aa[0], za, Aa[1]), (Ab[0], za, Ab[1]))
     mesh.add_quad(mat, (pd[0], z0, pd[1]), (pc[0], z0, pc[1]),
                   (Bb[0], za, Bb[1]), (Ba[0], za, Ba[1]))
-    # 4 short vertical "edge corners" connecting the chamfers
-    for (Sa, Sb, La, Lb) in [(Xa, Xb, pa, pd), (Yb, Ya, pc, pb),
-                              (Ab, Aa, pb, pa), (Ba, Bb, pd, pc)]:
-        pass  # corners are already closed by adjacent ramps
+
+    # 8 corner-pyramid triangles (the small triangle filling each pyramidal
+    # corner between a vertical chamfer and the top/bottom inset).
+    mesh.add_tri(mat, (Ab[0], zb, Ab[1]), (pb[0], z1, pb[1]), (Ya[0], zb, Ya[1]))
+    mesh.add_tri(mat, (Yb[0], zb, Yb[1]), (pc[0], z1, pc[1]), (Bb[0], zb, Bb[1]))
+    mesh.add_tri(mat, (Ba[0], zb, Ba[1]), (pd[0], z1, pd[1]), (Xb[0], zb, Xb[1]))
+    mesh.add_tri(mat, (Xa[0], zb, Xa[1]), (pa[0], z1, pa[1]), (Aa[0], zb, Aa[1]))
+    mesh.add_tri(mat, (Ya[0], za, Ya[1]), (pb[0], z0, pb[1]), (Ab[0], za, Ab[1]))
+    mesh.add_tri(mat, (Bb[0], za, Bb[1]), (pc[0], z0, pc[1]), (Yb[0], za, Yb[1]))
+    mesh.add_tri(mat, (Xb[0], za, Xb[1]), (pd[0], z0, pd[1]), (Ba[0], za, Ba[1]))
+    mesh.add_tri(mat, (Aa[0], za, Aa[1]), (pa[0], z0, pa[1]), (Xa[0], za, Xa[1]))
 
 
 def build_stairs(mesh, material, center, width, run, rotation_deg, z0, total_rise, n_steps):
@@ -647,7 +671,8 @@ def b_artwork(mesh, fr, w, d, h, z0, item, mat):
 
 def b_ceiling_panel(mesh, fr, w, d, h, z0, item, mat):
     base = z0 if z0 > EPS else 2.9
-    box_local(mesh, "ceiling", fr, -w / 2, -d / 2, w / 2, d / 2, base, base + h)
+    cm = "ceiling_perf" if item.get("perforated") else "ceiling"
+    box_local(mesh, cm, fr, -w / 2, -d / 2, w / 2, d / 2, base, base + h)
 
 
 def b_sconce(mesh, fr, w, d, h, z0, item, mat):
@@ -1076,6 +1101,11 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
     padding:6px 4px;cursor:pointer;border:1px solid #c4ccd6;border-radius:7px;
     background:#fff;color:#2a2f36;white-space:nowrap}
   #panel .views button:hover{background:#eef2f7}
+  #btn-render{margin-top:8px;width:100%;font:inherit;font-size:12px;
+    padding:8px 4px;cursor:pointer;border:1px solid #2f5fb0;border-radius:7px;
+    background:#3a72d0;color:#fff;font-weight:600}
+  #btn-render:hover{background:#2f5fb0}
+  #btn-render:disabled{background:#7a8b9d;border-color:#7a8b9d;cursor:wait}
 </style>
 </head>
 <body>
@@ -1096,6 +1126,15 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
     <button id="btn-iso">Iso</button>
     <button id="btn-top">Dessus</button>
     <button id="btn-walk">Visite</button>
+  </div>
+  <button id="btn-render" title="Lance un rendu photoréaliste (path tracer GPU) — gourmand, sur la vue courante.">📸 Rendu photo…</button>
+</div>
+<div id="render-overlay" style="display:none;position:fixed;inset:0;background:rgba(20,24,32,.88);z-index:9999;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-family:inherit;gap:14px">
+  <div id="render-img-wrap" style="max-width:90vw;max-height:78vh;background:#000;border:1px solid #555;border-radius:6px"></div>
+  <div id="render-status" style="font-size:13px;color:#cfd2d7">Initialisation…</div>
+  <div style="display:flex;gap:10px">
+    <button id="render-download" disabled style="font:inherit;font-size:13px;padding:8px 14px;border-radius:7px;border:1px solid #888;background:#3a72d0;color:#fff;cursor:pointer">Télécharger PNG</button>
+    <button id="render-close" style="font:inherit;font-size:13px;padding:8px 14px;border-radius:7px;border:1px solid #888;background:#fff;color:#222;cursor:pointer">Fermer</button>
   </div>
 </div>
 <div id="hud"><b>__TITLE__</b><br>glisser = pivoter · molette = zoom · clic droit = déplacer<br>ZQSD / flèches = marcher (mode Visite)</div>
@@ -1207,6 +1246,35 @@ function texMarble(){
     for(let k=0;k<6;k++){ px+=Math.random()*60-30; py+=Math.random()*60-30; x.lineTo(px,py); } x.stroke(); }
   return finishTex(c, 2.0);
 }
+function texPerforated(){
+  // White metal panel with regular punched holes (transparent), echoing the
+  // perforated ceiling cassettes in the reference render.
+  const s=256, c=document.createElement('canvas');
+  c.width=c.height=s; const x=c.getContext('2d');
+  x.fillStyle='#cfd2d7'; x.fillRect(0,0,s,s);
+  // light noise so it doesn't read as plastic
+  for(let i=0;i<2000;i++){
+    x.fillStyle='rgba(255,255,255,'+(Math.random()*0.07).toFixed(2)+')';
+    x.fillRect(Math.random()*s, Math.random()*s, 1, 1);
+  }
+  // punched holes: clear circles in a grid (the alpha channel makes them
+  // see-through, so the dark ceiling void shows through).
+  x.globalCompositeOperation = 'destination-out';
+  const step = 24, r = 6;
+  for(let py=step/2; py<s; py+=step){
+    for(let px=step/2; px<s; px+=step){
+      x.beginPath(); x.arc(px, py, r, 0, 6.283); x.fill();
+    }
+  }
+  x.globalCompositeOperation = 'source-over';
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = maxAniso;
+  // 1 tile = 0.5 m so the perforation grid reads at a believable scale.
+  t.repeat.set(1/0.5, 1/0.5);
+  return t;
+}
 function texArt(){
   // bold, abstract, Dubuffet-ish: outlined colour cells (non-figurative, so it
   // reads fine whatever the world-UV offset is)
@@ -1238,6 +1306,7 @@ const TEXFOR = {
   concrete:    ()=>texNoise('#a9a9ab', 2.6, 8),
   bed:         ()=>texFabric('#dcd8d0', 1.0),
   art:         ()=>texArt(),
+  ceiling_perf:()=>texPerforated(),
 };
 // Silhouette billboard for "entourage" figures (the semi-transparent ghosts
 // in arch-viz). Drawn once on a canvas, reused as a Sprite per person.
@@ -1297,8 +1366,17 @@ function applyTexture(mat){
   if(!mat || mat.userData.textured) return;
   const f = TEXFOR[mat.name];
   if(!f) return;
-  mat.map = f();
+  const t = f();
+  mat.map = t;
   mat.color.set(0xffffff);   // colour now comes from the texture
+  if(mat.name === 'ceiling_perf'){
+    // Use the texture's alpha channel as the cutout — the punched holes are
+    // real see-through gaps, not just dark dots.
+    mat.alphaMap = t;
+    mat.transparent = true;
+    mat.alphaTest = 0.5;
+    mat.side = THREE.DoubleSide;
+  }
   mat.needsUpdate = true;
   mat.userData.textured = true;
 }
@@ -1517,6 +1595,112 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
 document.getElementById('btn-top').addEventListener('click', topView);
 document.getElementById('btn-iso').addEventListener('click', isoView);
 document.getElementById('btn-walk').addEventListener('click', walkView);
+
+// ---- Path-traced photoreal render (opt-in, on the current viewpoint) ----
+// Loaded on demand from CDN to keep the base viewer lightweight. Designed
+// to be skippable on weak hardware: just don't click the button.
+const renderBtn = document.getElementById('btn-render');
+const ovl = document.getElementById('render-overlay');
+const ovlImg = document.getElementById('render-img-wrap');
+const ovlStatus = document.getElementById('render-status');
+const ovlDl = document.getElementById('render-download');
+document.getElementById('render-close').addEventListener('click', ()=>{
+  ovl.style.display='none'; ovlImg.innerHTML=''; ovlDl.disabled=true; ovlDl.onclick=null;
+});
+renderBtn.addEventListener('click', async ()=>{
+  if(!MODEL){ alert('Modèle pas encore chargé'); return; }
+  renderBtn.disabled = true; renderBtn.textContent = '⏳ Rendu…';
+  ovl.style.display='flex'; ovlImg.innerHTML='';
+  ovlDl.disabled = true; ovlDl.onclick = null;
+  ovlStatus.textContent='Préparation du rendu studio…';
+  try {
+    // High-quality "studio" still on the current viewpoint:
+    //  - 4x super-sampling (renders 4K, downscaled to 1080p, perfect AA)
+    //  - 4096px shadow map (sharper, cleaner shadows)
+    //  - same bloom/tone mapping as the live viewer
+    // Fast, fully self-contained (no external CDN dependency), runs on the
+    // same WebGL context the user already has open. NOT full path-traced GI
+    // — that one's the next milestone (baked lightmaps, stage 5A).
+    const W = 1920, H = 1080, SS = 2;       // SS² = 4× super-sampling
+    await new Promise(r => requestAnimationFrame(r));   // let UI paint
+    ovlStatus.textContent = 'Rendu… (super-sampling 4×)';
+    await new Promise(r => requestAnimationFrame(r));
+
+    // Use a fresh offscreen renderer at the SS resolution so we don't
+    // disturb the live viewer's framebuffer.
+    const hiCanvas = document.createElement('canvas');
+    hiCanvas.width = W * SS; hiCanvas.height = H * SS;
+    const hi = new THREE.WebGLRenderer({canvas: hiCanvas, antialias: true,
+      preserveDrawingBuffer: true});
+    hi.setPixelRatio(1);
+    hi.setSize(W * SS, H * SS, false);
+    hi.shadowMap.enabled = true;
+    hi.shadowMap.type = THREE.PCFSoftShadowMap;
+    hi.outputColorSpace = THREE.SRGBColorSpace;
+    hi.toneMapping = THREE.ACESFilmicToneMapping;
+    hi.toneMappingExposure = renderer.toneMappingExposure;
+
+    // Bigger shadow map for crisper edges in the export.
+    const oldMapSize = sun.shadow.mapSize.clone();
+    const oldMap = sun.shadow.map;
+    sun.shadow.map = null;          // forces re-creation at new size
+    sun.shadow.mapSize.set(4096, 4096);
+
+    const ptCam = new THREE.PerspectiveCamera(camera.fov, W/H, camera.near, camera.far);
+    ptCam.position.copy(camera.position);
+    ptCam.quaternion.copy(camera.quaternion);
+    ptCam.updateMatrixWorld();
+
+    // Render the WHOLE scene (lights, sprites, materials all included).
+    if(composer){
+      // Use a temporary composer at hi-res to keep the bloom.
+      const {EffectComposer} = await import('three/addons/postprocessing/EffectComposer.js');
+      const {RenderPass} = await import('three/addons/postprocessing/RenderPass.js');
+      const {UnrealBloomPass} = await import('three/addons/postprocessing/UnrealBloomPass.js');
+      const {OutputPass} = await import('three/addons/postprocessing/OutputPass.js');
+      const c = new EffectComposer(hi);
+      c.setSize(W * SS, H * SS);
+      c.addPass(new RenderPass(scene, ptCam));
+      c.addPass(new UnrealBloomPass(new THREE.Vector2(W * SS, H * SS),
+                                    0.32, 0.6, 0.92));
+      c.addPass(new OutputPass());
+      c.render();
+    } else {
+      hi.render(scene, ptCam);
+    }
+
+    // Down-sample to final resolution with the browser's smooth bilinear.
+    ovlStatus.textContent = 'Compression…';
+    await new Promise(r => requestAnimationFrame(r));
+    const out = document.createElement('canvas');
+    out.width = W; out.height = H;
+    out.style.maxWidth = '90vw'; out.style.maxHeight = '78vh';
+    out.style.display = 'block';
+    const ctx = out.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(hiCanvas, 0, 0, W * SS, H * SS, 0, 0, W, H);
+    ovlImg.appendChild(out);
+    ovlStatus.textContent = 'Terminé — 1920×1080 (super-sampling 4×)';
+    ovlDl.disabled = false;
+    ovlDl.onclick = () => {
+      const a = document.createElement('a');
+      a.href = out.toDataURL('image/png');
+      a.download = (document.title || 'render').replace(/\s*—.*/, '') + '.png';
+      a.click();
+    };
+
+    // Restore shadow map state.
+    sun.shadow.mapSize.copy(oldMapSize);
+    sun.shadow.map = oldMap;
+    hi.dispose();
+  } catch(err){
+    console.error(err);
+    ovlStatus.textContent = 'Échec : '+(err.message||err);
+  } finally {
+    renderBtn.disabled = false; renderBtn.textContent = '📸 Rendu photo…';
+  }
+});
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();

@@ -34,7 +34,7 @@
     {"type": "sconce", "at": [0.10, 5.0], "z": 1.85, "rotation": 90},
     {"type": "sconce", "at": [0.10, 6.0], "z": 1.85, "rotation": 90},
 
-    {"type": "ceiling", "at": [8, 3.5], "size": [15.6, 6.6], "z": 2.86, "height": 0.06},
+    {"type": "ceiling", "at": [8, 3.5], "size": [15.6, 6.6], "z": 2.86, "height": 0.06, "perforated": true},
 
     {"type": "downlight", "at": [2, 2],  "z": 2.85},
     {"type": "downlight", "at": [4, 2],  "z": 2.85},
