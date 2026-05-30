@@ -133,6 +133,12 @@ Open each PNG with the Read tool and extract, carefully:
     - **Light fixtures** — `sconce` (wall globe, set `z`≈1.8), `downlight`
       (recessed ceiling spot, set `z`≈ceiling−0.1, lay them on a grid),
       `pendant` (hanging), `floor_lamp`. They glow AND cast real light pools.
+      **Sconces hang off a wall, not in mid-air.** Place `at` on the wall
+      surface and set `rotation` so the sconce's local +Y points INTO the
+      wall: rotation 0 = wall along plan +Y (item pokes south); rotation 90
+      = wall on the west side (item pokes east); rotation 180 = wall on the
+      south; rotation 270 / -90 = wall on the east. The backplate stays
+      flush with the wall and the globe projects ~r metres into the room.
     - **Dropped ceiling** — `ceiling` panel (`size`, `z`≈height−0.1); place
       `downlight`s just under it. Toggle it with the Plafond layer.
     - **Plants / planters** — `plant`, `plant_large`, `planter`.

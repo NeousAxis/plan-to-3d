@@ -651,15 +651,26 @@ def b_ceiling_panel(mesh, fr, w, d, h, z0, item, mat):
 
 
 def b_sconce(mesh, fr, w, d, h, z0, item, mat):
+    """Wall-mounted globe sconce. Convention: the item's local +Y points AT
+    the wall (the "back" of the sconce), so the arm + globe project in the
+    -Y direction into the room. Set `rotation` so that +Y faces the wall.
+    `at` should sit ON the wall surface; `z` is the vertical centre."""
     base = z0 if z0 > EPS else 1.7
-    r = max(0.06, min(w, d) / 2)
-    # Round brushed-metal backplate, flush with the wall (-Y is the wall side
-    # by convention but a sconce hangs off it, so we centre everything on fr).
-    cyl_local(mesh, "metal", fr, 0, 0, r * 0.55, base - 0.005, base + 0.012, segs=14)
-    # Slim arm.
-    cyl_local(mesh, "metal", fr, 0, 0, 0.012, base + 0.012, base + 0.05, segs=10)
-    # The actual glowing globe — a real sphere, not a vertical tube.
-    sphere_local(mesh, "lamp", fr, 0, 0, base + 0.05 + r, r, rings=8, segs=14)
+    r = max(0.05, min(w, h) / 2)
+    cy = base + r           # vertical centre of the globe
+    # Vertical backplate plaqued against the wall: a thin slab sitting at y=0
+    # and projecting only 1.2 cm into the room.
+    plate = r * 0.85
+    box_chamfered(mesh, "metal", fr,
+                  -plate, 0.0, plate, 0.012,
+                  cy - plate, cy + plate, c=0.008)
+    # Horizontal arm reaching out from the plate into the room (-Y).
+    arm_len = r * 0.6
+    box_local(mesh, "metal", fr,
+              -0.012, -arm_len, 0.012, 0.0,
+              cy - 0.012, cy + 0.012)
+    # The glowing globe, hanging in the room a bit off the wall.
+    sphere_local(mesh, "lamp", fr, 0, -arm_len - r * 0.95, cy, r, rings=8, segs=14)
 
 
 def b_downlight(mesh, fr, w, d, h, z0, item, mat):
@@ -1051,19 +1062,19 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
     color:#3a4250;background:rgba(255,255,255,.78);padding:8px 11px;
     border-radius:7px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
   #hud b{color:#11151b}
-  #panel{position:fixed;right:12px;top:12px;background:rgba(255,255,255,.88);
-    border:1px solid #c4ccd6;border-radius:10px;padding:10px 12px;
-    box-shadow:0 2px 12px rgba(0,0,0,.13);font-size:13px;min-width:128px}
-  #panel h4{margin:0 0 7px;font-size:11px;letter-spacing:.05em;
+  #panel{position:fixed;right:14px;top:14px;background:rgba(255,255,255,.9);
+    border:1px solid #c4ccd6;border-radius:11px;padding:12px 14px;
+    box-shadow:0 2px 14px rgba(0,0,0,.14);font-size:13px;min-width:170px}
+  #panel h4{margin:0 0 8px;font-size:11px;letter-spacing:.05em;
     text-transform:uppercase;color:#76808e}
-  #panel label{display:flex;align-items:center;gap:8px;padding:3px 0;
+  #panel label{display:flex;align-items:center;gap:9px;padding:3px 0;
     cursor:pointer;color:#2a2f36;user-select:none}
   #panel input{accent-color:#3a72d0;width:15px;height:15px;cursor:pointer}
-  #panel .views{display:flex;gap:6px;margin-top:9px;border-top:1px solid #e2e6ec;
-    padding-top:9px}
-  #panel .views button{flex:1;font:inherit;font-size:12px;padding:6px 0;
-    cursor:pointer;border:1px solid #c4ccd6;border-radius:7px;background:#fff;
-    color:#2a2f36}
+  #panel .views{display:flex;gap:6px;margin-top:11px;border-top:1px solid #e2e6ec;
+    padding-top:10px}
+  #panel .views button{flex:1;min-width:0;font:inherit;font-size:12px;
+    padding:6px 4px;cursor:pointer;border:1px solid #c4ccd6;border-radius:7px;
+    background:#fff;color:#2a2f36;white-space:nowrap}
   #panel .views button:hover{background:#eef2f7}
 </style>
 </head>

@@ -30,9 +30,9 @@
     {"type": "column", "at": [8, 3.5],  "size": [0.5, 0.5], "round": true},
     {"type": "column", "at": [12, 3.5], "size": [0.5, 0.5], "round": true},
 
-    {"type": "sconce", "at": [4, 3.1],  "z": 1.8},
-    {"type": "sconce", "at": [8, 3.1],  "z": 1.8},
-    {"type": "sconce", "at": [12, 3.1], "z": 1.8},
+    {"type": "sconce", "at": [0.10, 1.0], "z": 1.85, "rotation": 90},
+    {"type": "sconce", "at": [0.10, 5.0], "z": 1.85, "rotation": 90},
+    {"type": "sconce", "at": [0.10, 6.0], "z": 1.85, "rotation": 90},
 
     {"type": "ceiling", "at": [8, 3.5], "size": [15.6, 6.6], "z": 2.86, "height": 0.06},
 
