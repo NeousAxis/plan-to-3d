@@ -1833,14 +1833,14 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
       if(nm==='glass' || nm==='window') o.castShadow = false;
       if(nm==='lamp'){ o.castShadow=false; m.emissiveIntensity=1.4; }
       if(m && m.emissiveMap && hasUV2(o.geometry) && PRELIT_OK.has(nm)){
-        // Treat the bake as a flat colour, on UV2.
+        // GI bake is a SUBTLE additive layer, not a replacement for runtime
+        // lighting. The SpotLights' halos on the wall + their floor pools
+        // MUST stay clearly visible (the whole point of "réaliste"), so the
+        // emissive intensity is kept low and the base colour is unmodified.
         m.emissiveMap.channel = 1;
         m.emissiveMap.colorSpace = THREE.SRGBColorSpace;
         m.emissive = new THREE.Color(0xffffff);
-        m.emissiveIntensity = 1.0;
-        // Dim the runtime base contribution so the bake dominates without
-        // washing out, but keep MeshStandard so SpotLights still cast halos.
-        m.color.multiplyScalar(0.25);
+        m.emissiveIntensity = 0.45;
         m.needsUpdate = true;
         lightmapped++;
       }
@@ -1850,13 +1850,13 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   });
   if(lightmapped){
     console.log(`plan-to-3d: ${lightmapped} GI-emissive shell meshes (PBR + bake)`);
-    // The bake encodes daylight + GI + fixture pools. Dim the sun and IBL
-    // so we don't double-light, but keep fixtures (point / spot) alive
-    // because their realtime halos and shadows are what sells the look.
-    scene.environmentIntensity = 0.25;
-    sun.intensity = 0.4;
-    fill.intensity = 0.2;
-    renderer.toneMappingExposure = 1.0;
+    // Keep the runtime lights almost full strength — the bake is supplemental
+    // (it adds GI bounce + subtle daylight wash) but the *visible* lighting
+    // is the SpotLights' halos and pools. Only trim IBL a touch.
+    scene.environmentIntensity = 0.55;
+    sun.intensity = 0.9;
+    fill.intensity = 0.35;
+    renderer.toneMappingExposure = 0.95;
   }
 
   const box = new THREE.Box3().setFromObject(model);
@@ -1905,7 +1905,8 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
     const downlight = p.y > FLOOR_Y + 2.2;
     const wantsShadow = i < SHADOW_CAP;
     if(downlight){
-      const S = new THREE.SpotLight(0xffd9a0, 8.0, 6.0,
+      // Downlight: punchy spot aimed at the floor → crisp light disc.
+      const S = new THREE.SpotLight(0xffd9a0, 14.0, 8.0,
                                     Math.PI*0.22, 0.35, 1.6);
       S.position.set(p.x, p.y - 0.08, p.z);
       S.target.position.set(p.x, FLOOR_Y, p.z);
@@ -1916,14 +1917,13 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
         S.shadow.normalBias = 0.02;
         S.shadow.camera.near = 0.3;
         S.shadow.camera.far = 8;
-        S.shadow.radius = 4;  // soft PCF
+        S.shadow.radius = 4;
       }
       scene.add(S); scene.add(S.target);
     } else {
-      const L = new THREE.PointLight(0xffe7c0, 0.7, radius*0.9, 2.0);
+      // Sconce / floor lamp: bigger omni glow that washes the nearby wall.
+      const L = new THREE.PointLight(0xffe7c0, 1.6, radius*1.1, 2.0);
       L.position.copy(p);
-      // Point lights with shadow maps use a cube map → 6× cost. Skip unless
-      // the fixture is in the SHADOW_CAP slot AND is a sconce or floor lamp.
       if(wantsShadow){
         L.castShadow = true;
         L.shadow.mapSize.set(512, 512);

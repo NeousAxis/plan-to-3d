@@ -313,23 +313,29 @@ def bake_emit_flatten(obj, src_img, dst_img):
     return dst_img
 
 
+SHELL_MATS = {
+    'wall', 'slab', 'roof', 'frame',
+    'ceiling', 'ceiling_perf', 'ceiling_dark',
+    'wood', 'wood_light', 'stone', 'concrete', 'door',
+}
+
+
 def attach_flattened_to_materials(obj, flat_img):
-    """After the 2nd EMIT bake, the flattened (base × light) image is a single
-    self-contained texture. Wire it into the Principled BSDF's Emission Color
-    (UV='Lightmap') so the glTF exporter packages it as emissiveTexture +
-    TEXCOORD_1. The viewer puts that map into the GI slot.
-    The base colour stays connected on its own input (UV0) so realtime fixture
-    lights can still spill on top of the bake."""
+    """Wire the flattened bake into the BSDF Emission Color (UV='Lightmap'),
+    ONLY for shell materials. Lamps / art / glass / fabric / plants keep
+    their original emission untouched, so they still glow / be transparent /
+    pick up realtime fixture lights in the viewer."""
     for slot in obj.material_slots:
         m = slot.material
         if m is None or not m.use_nodes:
+            continue
+        if m.name not in SHELL_MATS:
             continue
         nt = m.node_tree
         bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
         if bsdf is None:
             continue
         em = bsdf.inputs['Emission Color']
-        # remove any leftover emission links
         for l in list(em.links):
             nt.links.remove(l)
         uv = nt.nodes.new('ShaderNodeUVMap')
@@ -356,6 +362,9 @@ def main():
     add_fixtures(spec)
 
     # 1) Per-mesh UV2 unwrap + 2-pass bake (DIFFUSE light, then EMIT flatten)
+    # The bake runs on every mesh, but only SHELL_MATS receive the result —
+    # see attach_flattened_to_materials — so lamps/art/glass/etc keep their
+    # original emission, transparency and runtime light response.
     for i, obj in enumerate(meshes):
         unwrap_lightmap_uv(obj)
         light_img = make_lightmap_image(f"lightmap_{i:03d}", args.resolution)
