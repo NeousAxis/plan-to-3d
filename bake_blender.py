@@ -86,8 +86,71 @@ def configure_render(samples, w, h, exposure):
 
 def load_glb(path):
     bpy.ops.import_scene.gltf(filepath=path)
-    # Capture every imported mesh
-    return [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    upgrade_materials()
+    return meshes
+
+
+def upgrade_materials():
+    """Replace the flat glTF PBR shaders with richer Cycles networks:
+       - glass / window : real transmissive Principled BSDF (IOR 1.45, low
+         roughness, transmissive) so light filters through.
+       - lamp           : strong emission so fixtures cast visible light.
+       - art            : raise emission so the canvas pops in dim halls.
+       - ceiling_perf   : the alpha channel of the colour map cuts real
+         holes (Cycles 'Mix Shader' with Transparent BSDF).
+       - slab / floors  : a soft bump from the colour map so the terrazzo
+         catches highlights instead of looking flat.
+    """
+    for m in bpy.data.materials:
+        nm = (m.name or "").lower()
+        if not m.use_nodes:
+            m.use_nodes = True
+        nt = m.node_tree
+        bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+        out  = next((n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+        if not bsdf or not out:
+            continue
+        if 'glass' in nm or 'window' in nm:
+            bsdf.inputs['Transmission Weight'].default_value = 1.0
+            bsdf.inputs['Roughness'].default_value = 0.0
+            bsdf.inputs['IOR'].default_value = 1.45
+            bsdf.inputs['Alpha'].default_value = 1.0
+            bsdf.inputs['Base Color'].default_value = (0.92, 0.96, 0.99, 1.0)
+            m.use_backface_culling = False
+        elif nm == 'lamp':
+            bsdf.inputs['Emission Strength'].default_value = 18.0
+            bsdf.inputs['Emission Color'].default_value = (1.0, 0.92, 0.74, 1.0)
+        elif nm == 'art':
+            bsdf.inputs['Emission Strength'].default_value = 1.2
+            # use the texture for emission too (linked to its Base Color tex)
+            tex = next((l.from_node for l in bsdf.inputs['Base Color'].links
+                        if l.from_node.type == 'TEX_IMAGE'), None)
+            if tex:
+                nt.links.new(tex.outputs['Color'],
+                             bsdf.inputs['Emission Color'])
+        elif 'ceiling_perf' in nm:
+            tex = next((l.from_node for l in bsdf.inputs['Base Color'].links
+                        if l.from_node.type == 'TEX_IMAGE'), None)
+            if tex:
+                # alpha cutout via mix with transparent BSDF
+                tr = nt.nodes.new('ShaderNodeBsdfTransparent')
+                mix = nt.nodes.new('ShaderNodeMixShader')
+                mix.location = (out.location[0] - 200, out.location[1])
+                tr.location = (out.location[0] - 400, out.location[1] - 200)
+                nt.links.new(tex.outputs['Alpha'], mix.inputs['Fac'])
+                nt.links.new(tr.outputs['BSDF'], mix.inputs[1])
+                nt.links.new(bsdf.outputs['BSDF'], mix.inputs[2])
+                nt.links.new(mix.outputs['Shader'], out.inputs['Surface'])
+        elif nm in ('slab', 'wood', 'wood_light', 'concrete'):
+            tex = next((l.from_node for l in bsdf.inputs['Base Color'].links
+                        if l.from_node.type == 'TEX_IMAGE'), None)
+            if tex:
+                bump = nt.nodes.new('ShaderNodeBump')
+                bump.inputs['Strength'].default_value = 0.12 if nm == 'slab' else 0.06
+                bump.location = (bsdf.location[0] - 250, bsdf.location[1] - 320)
+                nt.links.new(tex.outputs['Color'], bump.inputs['Height'])
+                nt.links.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
 
 
 # ---------------------------------------------------------------------------

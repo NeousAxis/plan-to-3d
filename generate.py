@@ -1138,6 +1138,11 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
     padding:6px 4px;cursor:pointer;border:1px solid #c4ccd6;border-radius:7px;
     background:#fff;color:#2a2f36;white-space:nowrap}
   #panel .views button:hover{background:#eef2f7}
+  #panel .art-pick{margin-top:10px;border-top:1px solid #e2e6ec;
+    padding-top:9px;display:flex;align-items:center;gap:8px;font-size:12px}
+  #panel .art-pick label{padding:0;cursor:default}
+  #panel .art-pick select{flex:1;font:inherit;font-size:12px;padding:5px 6px;
+    border:1px solid #c4ccd6;border-radius:6px;background:#fff;color:#2a2f36}
   #btn-render{margin-top:8px;width:100%;font:inherit;font-size:12px;
     padding:8px 4px;cursor:pointer;border:1px solid #2f5fb0;border-radius:7px;
     background:#3a72d0;color:#fff;font-weight:600}
@@ -1163,6 +1168,21 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
     <button id="btn-iso">Iso</button>
     <button id="btn-top">Dessus</button>
     <button id="btn-walk">Visite</button>
+  </div>
+  <div class="art-pick">
+    <label for="art-palette">Tableau</label>
+    <select id="art-palette">
+      <option value="blue">Bleu nuit</option>
+      <option value="magenta">Magenta</option>
+      <option value="orange">Orange / jaune</option>
+      <option value="green">Vert vif</option>
+      <option value="violet_blue">Violet-bleu</option>
+      <option value="dark_green">Vert foncé</option>
+      <option value="purple">Pourpre / rose</option>
+      <option value="cyan">Cyan</option>
+      <option value="indigo">Indigo</option>
+      <option value="brown">Marron / or</option>
+    </select>
   </div>
   <button id="btn-render" title="Lance un rendu photoréaliste (path tracer GPU) — gourmand, sur la vue courante.">📸 Rendu photo…</button>
 </div>
@@ -1196,6 +1216,20 @@ const GLB_B64 = "__GLB_B64__";
 const LABELS = __LABELS__;
 const PEOPLE = __PEOPLE__;
 window.__artHue = __ART_HUE__;
+window.__artFrameColor = __ART_FRAME_COLOR__;
+// 10 art palettes — same names as ART_PALETTES in generate.py
+const ART_PALETTES = {
+  blue:        {hue: 225, frame: '#4d8bff'},
+  magenta:     {hue: 300, frame: '#f7c4f5'},
+  orange:      {hue:  30, frame: '#e83a1d'},
+  green:       {hue: 110, frame: '#9bea3a'},
+  violet_blue: {hue: 250, frame: '#ef4b80'},
+  dark_green:  {hue: 100, frame: '#7df539'},
+  purple:      {hue: 320, frame: '#d56fe0'},
+  cyan:        {hue: 195, frame: '#33f0ff'},
+  indigo:      {hue: 215, frame: '#5cd8ff'},
+  brown:       {hue:  40, frame: '#cf9d3d'},
+};
 const SKY = 0xe9edf2;
 
 const app = document.getElementById('app');
@@ -1437,7 +1471,15 @@ function makePerson(x, z, h){
 }
 
 function applyTexture(mat){
-  if(!mat || mat.userData.textured) return;
+  if(!mat) return;
+  if(mat.name === 'art_frame'){
+    // Bezel colour comes from the chosen art palette (independent of the
+    // texture system).
+    mat.color = new THREE.Color(window.__artFrameColor || '#dc2e33');
+    mat.needsUpdate = true;
+    return;
+  }
+  if(mat.userData.textured) return;
   const f = TEXFOR[mat.name];
   if(!f) return;
   const t = f();
@@ -1461,6 +1503,30 @@ function applyTexture(mat){
   mat.needsUpdate = true;
   mat.userData.textured = true;
 }
+// Swap to a different palette at runtime: regenerate the art texture and
+// recolour the bezel without reloading the page.
+function setArtPalette(name){
+  const p = ART_PALETTES[name];
+  if(!p) return;
+  window.__artHue = p.hue;
+  window.__artFrameColor = p.frame;
+  if(!MODEL) return;
+  MODEL.traverse(o => {
+    if(!o.isMesh || !o.material) return;
+    if(o.material.name === 'art'){
+      // dispose previous texture, regenerate
+      if(o.material.map) o.material.map.dispose();
+      const t = texArt(p.hue);
+      o.material.map = t;
+      o.material.emissiveMap = t;
+      o.material.needsUpdate = true;
+    } else if(o.material.name === 'art_frame'){
+      o.material.color = new THREE.Color(p.frame);
+      o.material.needsUpdate = true;
+    }
+  });
+}
+window.setArtPalette = setArtPalette;
 
 // Optional bloom for glowing fixtures. Auto-disabled on low-end hardware so
 // the same viewer.html runs everywhere ("pour tout le monde").
@@ -1677,6 +1743,20 @@ document.getElementById('btn-top').addEventListener('click', topView);
 document.getElementById('btn-iso').addEventListener('click', isoView);
 document.getElementById('btn-walk').addEventListener('click', walkView);
 
+// Pre-select the dropdown to the closest palette by hue, then wire the picker
+(() => {
+  const sel = document.getElementById('art-palette');
+  if(!sel) return;
+  let best = 'blue', bestDist = 1e9;
+  for(const [k, p] of Object.entries(ART_PALETTES)){
+    const d = Math.min(Math.abs(p.hue - window.__artHue),
+                       360 - Math.abs(p.hue - window.__artHue));
+    if(d < bestDist){ bestDist = d; best = k; }
+  }
+  sel.value = best;
+  sel.addEventListener('change', () => setArtPalette(sel.value));
+})();
+
 // ---- Path-traced photoreal render (opt-in, on the current viewpoint) ----
 // Loaded on demand from CDN to keep the base viewer lightweight. Designed
 // to be skippable on weak hardware: just don't click the button.
@@ -1803,7 +1883,45 @@ addEventListener('resize', () => {
 """
 
 
-def write_viewer(glb_bytes, rooms, title, people=None, art_hue=225):
+# 10 named art palettes — drawn from the user's own Rothko-grid samples.
+# `hue`   = HSL hue (°) for the 16-cell gradient texture.
+# `frame` = vivid bezel colour (hex) for the 3D art_frame material.
+ART_PALETTES = {
+    "blue":         {"hue": 225, "frame": "#4d8bff"},
+    "magenta":      {"hue": 300, "frame": "#f7c4f5"},
+    "orange":       {"hue":  30, "frame": "#e83a1d"},
+    "green":        {"hue": 110, "frame": "#9bea3a"},
+    "violet_blue":  {"hue": 250, "frame": "#ef4b80"},
+    "dark_green":   {"hue": 100, "frame": "#7df539"},
+    "purple":       {"hue": 320, "frame": "#d56fe0"},
+    "cyan":         {"hue": 195, "frame": "#33f0ff"},
+    "indigo":       {"hue": 215, "frame": "#5cd8ff"},
+    "brown":        {"hue":  40, "frame": "#cf9d3d"},
+}
+
+
+def resolve_art_palette(spec):
+    """Return (hue, frame_hex). Reads spec['meta'] in this priority:
+      1. art_palette: 'name'      -> ART_PALETTES[name]
+      2. art_hue + art_frame_color
+      3. art_hue alone            -> default frame (coral red)
+      4. nothing                  -> 'blue' preset
+    """
+    meta = spec.get("meta", {})
+    name = meta.get("art_palette")
+    if name and name in ART_PALETTES:
+        p = ART_PALETTES[name]
+        return int(p["hue"]), p["frame"]
+    hue = meta.get("art_hue")
+    if hue is not None:
+        frame = meta.get("art_frame_color", "#dc2e33")
+        return int(hue), frame
+    p = ART_PALETTES["blue"]
+    return int(p["hue"]), p["frame"]
+
+
+def write_viewer(glb_bytes, rooms, title, people=None,
+                 art_hue=225, art_frame_color="#dc2e33"):
     b64 = base64.b64encode(glb_bytes).decode("ascii")
     labels = json.dumps(rooms, ensure_ascii=False)
     people_json = json.dumps(people or [], ensure_ascii=False)
@@ -1812,7 +1930,8 @@ def write_viewer(glb_bytes, rooms, title, people=None, art_hue=225):
             .replace("__GLB_B64__", b64)
             .replace("__LABELS__", labels)
             .replace("__PEOPLE__", people_json)
-            .replace("__ART_HUE__", str(int(art_hue))))
+            .replace("__ART_HUE__", str(int(art_hue)))
+            .replace("__ART_FRAME_COLOR__", json.dumps(art_frame_color)))
     return html
 
 
@@ -1921,9 +2040,10 @@ def main():
         f.write(glb)
 
     viewer_path = os.path.join(args.out, "viewer.html")
-    art_hue = int(spec.get("meta", {}).get("art_hue", 225))
+    art_hue, art_frame = resolve_art_palette(spec)
     with open(viewer_path, "w", encoding="utf-8") as f:
-        f.write(write_viewer(glb, rooms, title, collect_people(spec), art_hue))
+        f.write(write_viewer(glb, rooms, title, collect_people(spec),
+                              art_hue, art_frame))
 
     tri = sum(len(mesh.groups[m]["indices"]) // 3 for m in MATERIALS)
     print("model:   %s (%d bytes)" % (glb_path, len(glb)))
