@@ -124,6 +124,18 @@ Open each PNG with the Read tool and extract, carefully:
     - **Lounge** — `sofa` / `sofa_l` + `armchair` + `coffee_table` + a `rug`.
     - **Lockers / storage / credenza / shelving** — long thin rectangles
       against walls: `cabinet`, `wardrobe`, `lockers`, `credenza`, `shelving`.
+  Lobby / reception plans add these:
+    - **Reception desk** — `reception_desk` (wood body + stone counter + ledge).
+    - **Bench** — `bench` (seat on metal legs), often in a row along a wall.
+    - **Framed artwork** — `artwork` on a wall: set `rotation` so its width runs
+      along the wall, `z` = bottom height, `height` = artwork height. Rendered
+      with a colourful abstract canvas (placeholder for real art).
+    - **Light fixtures** — `sconce` (wall globe, set `z`≈1.8), `downlight`
+      (recessed ceiling spot, set `z`≈ceiling−0.1, lay them on a grid),
+      `pendant` (hanging), `floor_lamp`. They glow AND cast real light pools.
+    - **Dropped ceiling** — `ceiling` panel (`size`, `z`≈height−0.1); place
+      `downlight`s just under it. Toggle it with the Plafond layer.
+    - **Plants / planters** — `plant`, `plant_large`, `planter`.
   If a symbol is ambiguous, prefer a sensible default over skipping it —
   an empty 3D room is the worst outcome.
 
@@ -164,8 +176,13 @@ Follow `schema.json`. Minimal shape:
 }
 ```
 
-A full worked office example lives in `examples/office_floor.json`; the
-residential example is `examples/demo_house.json`.
+Worked examples: `examples/lobby.json` (reception hall: wood-clad wall, artwork,
+columns, sconces, downlit ceiling, terrazzo, benches), `examples/office_floor.json`
+(open-plan office), `examples/demo_house.json` (residential).
+
+A wall can carry a `"finish"` material, e.g.
+`{"start": [...], "end": [...], "finish": "wood"}` for a wood-clad feature wall
+(any furniture material name works: `wood`, `stone`, `concrete`, …).
 
 Rules of thumb:
 - `openings[].wall` is the index of the wall in the `walls` array.
@@ -205,12 +222,17 @@ Outputs `model.glb`, `viewer.html`, and (with `--preview`) `preview.png`.
 
 ### 5. Verify, then deliver
 
-- ALWAYS open `viewer.html` and look before claiming done. It renders with soft
-  shadows, ambient (IBL) lighting and tone mapping, and has a toolbar:
-  **Hide roof** (inspect the interior), **Top view**, **Iso view**. Check the
-  footprint, that furniture sits in the right rooms, faces the right way, and
-  doesn't overlap walls. From the browser console you can also call
-  `window.__viewer.setMaterialVisible('roof', false)` / `.topDown()` / `.iso()`.
+- ALWAYS open `viewer.html` and look before claiming done. It renders with
+  textured PBR materials (wood, terrazzo, marble, plaster, fabric, abstract
+  art), soft shadows, ambient (IBL) lighting, tone mapping, and real light
+  fixtures that cast pools. UI:
+    - a **Calques** (layers) panel with checkboxes — Toit, Plafond, Murs, Verre,
+      Sol, Mobilier, Luminaires, Étiquettes (rows for empty layers auto-hide);
+    - view buttons **Iso**, **Dessus** (top), **Visite** (eye-level walkthrough;
+      then **ZQSD / WASD / arrows** to walk).
+  Check the footprint, that furniture sits in the right rooms, faces the right
+  way, and doesn't overlap walls. From the console: `window.__viewer.setLayer
+  ('roof', false)` / `.walk()` / `.topDown()` / `.iso()`.
 - `preview.png` (with `--preview`, needs matplotlib) is a rough flat-shaded
   check only; the HTML viewer is the real deliverable quality.
 - If something is off, fix `building.json` and regenerate. Iterate until the

@@ -70,6 +70,11 @@ MATERIALS = {
     "sanitary":   _mat([0.95, 0.96, 0.97, 1.0], rough=0.25),
     "bed":        _mat([0.87, 0.85, 0.81, 1.0], rough=0.9),
     "stairs":     _mat([0.74, 0.74, 0.76, 1.0], rough=0.8),
+    # --- lighting / finishes ---
+    "lamp":       _mat([0.99, 0.96, 0.90, 1.0], rough=0.25,
+                       emissive=[1.0, 0.92, 0.74]),  # glowing fixtures
+    "ceiling":    _mat([0.82, 0.83, 0.85, 1.0], rough=0.5, metal=0.25),
+    "art":        _mat([0.55, 0.55, 0.57, 1.0], rough=0.55),  # textured in viewer
 }
 
 # Per-type defaults: footprint [w, d, h] in metres plus the component
@@ -128,9 +133,20 @@ FURNITURE_TYPES = {
     "bathtub":         {"size": [1.7, 0.75, 0.55],"builder": "box", "material": "sanitary"},
     "shower":          {"size": [0.9, 0.9, 0.05], "builder": "box", "material": "sanitary"},
     "bidet":           {"size": [0.4, 0.55, 0.4], "builder": "box", "material": "sanitary"},
+    # reception / lobby
+    "reception_desk":  {"size": [3.0, 0.8, 1.1],  "builder": "reception"},
+    "bench":           {"size": [1.6, 0.45, 0.45],"builder": "bench"},
+    "artwork":         {"size": [1.8, 0.06, 1.6], "builder": "artwork"},
+    "ceiling":         {"size": [4.0, 4.0, 0.08], "builder": "ceiling_panel"},
+    # lighting fixtures (glow + drive real lights in the viewer)
+    "sconce":          {"size": [0.16, 0.16, 0.18], "builder": "sconce"},
+    "downlight":       {"size": [0.14, 0.14, 0.04], "builder": "downlight"},
+    "pendant":         {"size": [0.3, 0.3, 0.5],    "builder": "pendant"},
+    "floor_lamp":      {"size": [0.3, 0.3, 1.6],    "builder": "floor_lamp"},
     # misc
     "plant":           {"size": [0.5, 0.5, 1.2],  "builder": "plant"},
     "plant_large":     {"size": [0.7, 0.7, 1.7],  "builder": "plant"},
+    "planter":         {"size": [0.7, 0.7, 1.0],  "builder": "plant"},
     "column":          {"size": [0.4, 0.4, 2.7],  "builder": "column"},
     "partition":       {"size": [1.6, 0.06, 1.8], "builder": "box", "material": "glass"},
     "stairs":          {"size": [1.0, 3.0, 2.7],  "builder": "stairs"},
@@ -500,6 +516,62 @@ def b_column(mesh, fr, w, d, h, z0, item, mat):
         box_local(mesh, "concrete", fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + h)
 
 
+def b_reception(mesh, fr, w, d, h, z0, item, mat):
+    body = item.get("material") or "wood"
+    box_local(mesh, body, fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + h - 0.04)
+    box_local(mesh, "stone", fr, -w / 2 - 0.03, -d / 2 - 0.03, w / 2 + 0.03, d / 2 + 0.03,
+              z0 + h - 0.04, z0 + h)  # counter top
+    # raised transaction ledge along the front (-Y)
+    box_local(mesh, "stone", fr, -w / 2, -d / 2 - 0.06, w / 2, -d / 2,
+              z0 + h - 0.04, z0 + h + 0.06)
+
+
+def b_bench(mesh, fr, w, d, h, z0, item, mat):
+    smat = item.get("material") or "wood_light"
+    box_local(mesh, smat, fr, -w / 2, -d / 2, w / 2, d / 2, z0 + h - 0.06, z0 + h)
+    for sx in (-1, 1):
+        box_local(mesh, "metal", fr, sx * (w / 2 - 0.1) - 0.03, -d / 2 + 0.03,
+                  sx * (w / 2 - 0.1) + 0.03, d / 2 - 0.03, z0, z0 + h - 0.06)
+
+
+def b_artwork(mesh, fr, w, d, h, z0, item, mat):
+    base = z0 if z0 > EPS else 1.0
+    t = max(d, 0.04)
+    box_local(mesh, "dark", fr, -w / 2, -t / 2, w / 2, t / 2, base, base + h)  # frame
+    box_local(mesh, "art", fr, -w / 2 + 0.06, -t / 2 - 0.01, w / 2 - 0.06, -t / 2,
+              base + 0.06, base + h - 0.06)  # canvas, just proud of the frame
+
+
+def b_ceiling_panel(mesh, fr, w, d, h, z0, item, mat):
+    base = z0 if z0 > EPS else 2.9
+    box_local(mesh, "ceiling", fr, -w / 2, -d / 2, w / 2, d / 2, base, base + h)
+
+
+def b_sconce(mesh, fr, w, d, h, z0, item, mat):
+    base = z0 if z0 > EPS else 1.7
+    cyl_local(mesh, "metal", fr, 0, 0, 0.02, base, base + 0.05, segs=8)  # stem
+    r = min(w, d) / 2
+    cyl_local(mesh, "lamp", fr, 0, 0, r, base + 0.05, base + 0.05 + h, segs=14)  # globe
+
+
+def b_downlight(mesh, fr, w, d, h, z0, item, mat):
+    base = z0 if z0 > EPS else 2.88
+    cyl_local(mesh, "lamp", fr, 0, 0, min(w, d) / 2, base - h, base, segs=14)
+
+
+def b_pendant(mesh, fr, w, d, h, z0, item, mat):
+    top = z0 if z0 > EPS else 2.9
+    drum = 0.22
+    cyl_local(mesh, "metal", fr, 0, 0, 0.008, top - 0.5, top, segs=6)  # cord
+    cyl_local(mesh, "lamp", fr, 0, 0, min(w, d) / 2, top - 0.5 - drum, top - 0.5, segs=16)
+
+
+def b_floor_lamp(mesh, fr, w, d, h, z0, item, mat):
+    cyl_local(mesh, "metal", fr, 0, 0, min(w, d) / 2 * 0.6, z0, z0 + 0.03, segs=14)  # base
+    cyl_local(mesh, "metal", fr, 0, 0, 0.015, z0, z0 + h - 0.18, segs=8)  # stem
+    cyl_local(mesh, "lamp", fr, 0, 0, min(w, d) / 2, z0 + h - 0.18, z0 + h, segs=16)  # shade
+
+
 def b_stairs(mesh, fr, w, d, h, z0, item, mat):
     n = int(item.get("steps", max(2, round(h / 0.17))))
     build_stairs(mesh, "stairs", (fr.cx, fr.cy), w, d, fr.rot, z0, h, n)
@@ -512,6 +584,9 @@ BUILDERS = {
     "sofa": b_sofa, "armchair": b_armchair, "table_chairs": b_table_chairs,
     "round_table": b_round_table, "kitchen": b_kitchen, "cabinet": b_cabinet,
     "tv": b_tv, "plant": b_plant, "column": b_column, "stairs": b_stairs,
+    "reception": b_reception, "bench": b_bench, "artwork": b_artwork,
+    "ceiling_panel": b_ceiling_panel, "sconce": b_sconce, "downlight": b_downlight,
+    "pendant": b_pendant, "floor_lamp": b_floor_lamp,
 }
 
 
@@ -574,6 +649,9 @@ def build_model(spec):
             oriented_box(mesh, "frame", start, end, thickness, height - 0.06, height)
             continue
 
+        # Optional wall finish (e.g. "finish": "wood" for a wood-clad wall).
+        wmat = w.get("finish", "wall")
+
         ops = []
         for op in openings_by_wall.get(i, []):
             width = float(op.get("width", 0.9))
@@ -593,26 +671,26 @@ def build_model(spec):
         ops.sort(key=lambda o: o["a"])
 
         if not ops:
-            oriented_box(mesh, "wall", start, end, thickness, 0.0, height)
+            oriented_box(mesh, wmat, start, end, thickness, 0.0, height)
             continue
 
         prev = 0.0
         for o in ops:
             if o["a"] - prev > EPS:
-                oriented_box(mesh, "wall", at(prev), at(o["a"]), thickness, 0.0, height)
+                oriented_box(mesh, wmat, at(prev), at(o["a"]), thickness, 0.0, height)
             # sill (below opening)
             if o["sill"] > EPS:
-                oriented_box(mesh, "wall", at(o["a"]), at(o["b"]), thickness, 0.0, o["sill"])
+                oriented_box(mesh, wmat, at(o["a"]), at(o["b"]), thickness, 0.0, o["sill"])
             # lintel (above opening)
             if height - o["top"] > EPS:
-                oriented_box(mesh, "wall", at(o["a"]), at(o["b"]), thickness, o["top"], height)
+                oriented_box(mesh, wmat, at(o["a"]), at(o["b"]), thickness, o["top"], height)
             # pane / door panel inside the hole
             mat = "window" if o["kind"] == "window" else "door"
             pane_t = 0.05
             oriented_box(mesh, mat, at(o["a"]), at(o["b"]), pane_t, o["sill"], o["top"])
             prev = max(prev, o["b"])
         if ln - prev > EPS:
-            oriented_box(mesh, "wall", at(prev), end, thickness, 0.0, height)
+            oriented_box(mesh, wmat, at(prev), end, thickness, 0.0, height)
 
     # footprint bbox (used by slab / roof)
     bbox = _footprint_bbox(walls)
@@ -755,6 +833,31 @@ def write_glb(mesh):
         })
         nrm_acc = len(accessors) - 1
 
+        # texcoords (float32 vec2): world-space triplanar projection in metres.
+        # Each face has a constant normal (flat shading), so projecting onto the
+        # plane perpendicular to the dominant normal axis gives clean, seam-free
+        # tiling. The viewer scales tiling per-material via texture.repeat.
+        uvs = []
+        for k in range(len(positions)):
+            px, py, pz = positions[k]
+            nx, ny, nz = normals[k]
+            ax, ay, az = abs(nx), abs(ny), abs(nz)
+            if ay >= ax and ay >= az:      # horizontal face -> X,Z
+                u, v = px, pz
+            elif ax >= ay and ax >= az:    # normal along X -> Z,Y
+                u, v = pz, py
+            else:                          # normal along Z -> X,Y
+                u, v = px, py
+            uvs.append((u, v))
+        flat_uv = [c for vv in uvs for c in vv]
+        uv_bytes = struct.pack("<%df" % len(flat_uv), *flat_uv)
+        uv_view = add_view(uv_bytes, 34962)
+        accessors.append({
+            "bufferView": uv_view, "componentType": 5126,
+            "count": len(uvs), "type": "VEC2",
+        })
+        uv_acc = len(accessors) - 1
+
         # material
         m = {
             "pbrMetallicRoughness": {
@@ -773,7 +876,8 @@ def write_glb(mesh):
         mat_index[name] = len(materials_json) - 1
 
         primitives.append({
-            "attributes": {"POSITION": pos_acc, "NORMAL": nrm_acc},
+            "attributes": {"POSITION": pos_acc, "NORMAL": nrm_acc,
+                           "TEXCOORD_0": uv_acc},
             "indices": idx_acc,
             "material": mat_index[name],
             "mode": 4,
@@ -832,22 +936,41 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
     color:#3a4250;background:rgba(255,255,255,.78);padding:8px 11px;
     border-radius:7px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
   #hud b{color:#11151b}
-  #toolbar{position:fixed;right:12px;top:12px;display:flex;gap:6px}
-  #toolbar button{font:inherit;font-size:12px;padding:6px 10px;cursor:pointer;
-    border:1px solid #c4ccd6;border-radius:7px;background:rgba(255,255,255,.85);
-    color:#2a2f36;box-shadow:0 1px 3px rgba(0,0,0,.1)}
-  #toolbar button:hover{background:#fff}
-  #toolbar button.active{background:#3a72d0;color:#fff;border-color:#2f5fb0}
+  #panel{position:fixed;right:12px;top:12px;background:rgba(255,255,255,.88);
+    border:1px solid #c4ccd6;border-radius:10px;padding:10px 12px;
+    box-shadow:0 2px 12px rgba(0,0,0,.13);font-size:13px;min-width:128px}
+  #panel h4{margin:0 0 7px;font-size:11px;letter-spacing:.05em;
+    text-transform:uppercase;color:#76808e}
+  #panel label{display:flex;align-items:center;gap:8px;padding:3px 0;
+    cursor:pointer;color:#2a2f36;user-select:none}
+  #panel input{accent-color:#3a72d0;width:15px;height:15px;cursor:pointer}
+  #panel .views{display:flex;gap:6px;margin-top:9px;border-top:1px solid #e2e6ec;
+    padding-top:9px}
+  #panel .views button{flex:1;font:inherit;font-size:12px;padding:6px 0;
+    cursor:pointer;border:1px solid #c4ccd6;border-radius:7px;background:#fff;
+    color:#2a2f36}
+  #panel .views button:hover{background:#eef2f7}
 </style>
 </head>
 <body>
 <div id="app"></div>
-<div id="toolbar">
-  <button id="btn-roof">Hide roof</button>
-  <button id="btn-top">Top view</button>
-  <button id="btn-iso">Iso view</button>
+<div id="panel">
+  <h4>Calques</h4>
+  <label><input type="checkbox" id="ck-roof" checked> Toit</label>
+  <label><input type="checkbox" id="ck-ceiling" checked> Plafond</label>
+  <label><input type="checkbox" id="ck-walls" checked> Murs</label>
+  <label><input type="checkbox" id="ck-glass" checked> Verre</label>
+  <label><input type="checkbox" id="ck-floor" checked> Sol</label>
+  <label><input type="checkbox" id="ck-furniture" checked> Mobilier</label>
+  <label><input type="checkbox" id="ck-lights" checked> Luminaires</label>
+  <label><input type="checkbox" id="ck-labels" checked> Étiquettes</label>
+  <div class="views">
+    <button id="btn-iso">Iso</button>
+    <button id="btn-top">Dessus</button>
+    <button id="btn-walk">Visite</button>
+  </div>
 </div>
-<div id="hud"><b>__TITLE__</b><br>drag = rotate · scroll = zoom · right-drag = pan</div>
+<div id="hud"><b>__TITLE__</b><br>glisser = pivoter · molette = zoom · clic droit = déplacer<br>ZQSD / flèches = marcher (mode Visite)</div>
 <script type="importmap">
 { "imports": {
   "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
@@ -885,6 +1008,111 @@ app.appendChild(renderer.domElement);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
+// --- Procedural textures (canvas — no files, no network, tiny) ------------
+// UVs in the GLB are world metres, so texture.repeat = 1/tileSizeInMetres.
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+function mkCanvas(s){ const c=document.createElement('canvas'); c.width=c.height=s; return c; }
+function finishTex(canvas, tile){
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = maxAniso;
+  t.repeat.set(1/tile, 1/tile);
+  return t;
+}
+function texWood(base, tile){
+  const s=512, c=mkCanvas(s), x=c.getContext('2d');
+  x.fillStyle=base; x.fillRect(0,0,s,s);
+  for(let i=0;i<2400;i++){
+    const px=Math.random()*s, py=Math.random()*s, h=Math.random()*150+40;
+    const dark=Math.random()>0.5;
+    x.strokeStyle=(dark?'rgba(45,28,12,':'rgba(255,236,205,')+(Math.random()*0.16).toFixed(3)+')';
+    x.lineWidth=Math.random()*2.2+0.4;
+    x.beginPath(); x.moveTo(px,py); x.lineTo(px+Math.random()*5-2.5, py+h); x.stroke();
+  }
+  return finishTex(c, tile||1.3);
+}
+function texTerrazzo(){
+  const s=512, c=mkCanvas(s), x=c.getContext('2d');
+  x.fillStyle='#dad7d0'; x.fillRect(0,0,s,s);
+  const cols=['#9aa0a6','#b9622f','#3b3f46','#c9c4ba','#7d8a6f','#a89a86'];
+  for(let i=0;i<950;i++){
+    x.fillStyle=cols[(Math.random()*cols.length)|0]; x.globalAlpha=0.82;
+    const r=Math.random()*7+2, px=Math.random()*s, py=Math.random()*s, n=5+(Math.random()*3|0);
+    x.beginPath();
+    for(let k=0;k<n;k++){ const a=k/n*6.283, rr=r*(0.6+Math.random()*0.6);
+      const xx=px+Math.cos(a)*rr, yy=py+Math.sin(a)*rr; k?x.lineTo(xx,yy):x.moveTo(xx,yy); }
+    x.closePath(); x.fill();
+  }
+  x.globalAlpha=1;
+  return finishTex(c, 1.6);
+}
+function texNoise(base, tile, amp){
+  const s=256, c=mkCanvas(s), x=c.getContext('2d');
+  x.fillStyle=base; x.fillRect(0,0,s,s);
+  amp=amp||10;
+  for(let i=0;i<5000;i++){ const v=(Math.random()*2-1)*amp;
+    x.fillStyle=(v<0?'rgba(0,0,0,':'rgba(255,255,255,')+(Math.abs(v)/255).toFixed(3)+')';
+    x.fillRect(Math.random()*s, Math.random()*s, 1, 1); }
+  return finishTex(c, tile||3.0);
+}
+function texFabric(base, tile){
+  const s=256, c=mkCanvas(s), x=c.getContext('2d');
+  x.fillStyle=base; x.fillRect(0,0,s,s);
+  for(let i=0;i<s;i+=2){ x.fillStyle='rgba(255,255,255,0.045)'; x.fillRect(0,i,s,1);
+    x.fillStyle='rgba(0,0,0,0.05)'; x.fillRect(i,0,1,s); }
+  return finishTex(c, tile||0.7);
+}
+function texMarble(){
+  const s=512, c=mkCanvas(s), x=c.getContext('2d');
+  x.fillStyle='#ece9e3'; x.fillRect(0,0,s,s);
+  x.strokeStyle='rgba(150,150,150,0.22)'; x.lineWidth=1.2;
+  for(let i=0;i<42;i++){ x.beginPath(); let px=Math.random()*s, py=Math.random()*s; x.moveTo(px,py);
+    for(let k=0;k<6;k++){ px+=Math.random()*60-30; py+=Math.random()*60-30; x.lineTo(px,py); } x.stroke(); }
+  return finishTex(c, 2.0);
+}
+function texArt(){
+  // bold, abstract, Dubuffet-ish: outlined colour cells (non-figurative, so it
+  // reads fine whatever the world-UV offset is)
+  const s=512, c=mkCanvas(s), x=c.getContext('2d');
+  x.fillStyle='#f1eee7'; x.fillRect(0,0,s,s);
+  const cols=['#bd3026','#2e4a8b','#e1b12c','#c8cdd2','#111111','#d35400',
+              '#2a8f5a','#7d4fa0','#e8edf0'];
+  x.lineWidth=2.5; x.strokeStyle='#141414';
+  for(let i=0;i<140;i++){
+    x.fillStyle=cols[(Math.random()*cols.length)|0];
+    const px=Math.random()*s, py=Math.random()*s, n=4+(Math.random()*4|0), r=18+Math.random()*60;
+    x.beginPath();
+    for(let k=0;k<n;k++){ const a=k/n*6.283+Math.random()*0.5, rr=r*(0.5+Math.random()*0.8);
+      const xx=px+Math.cos(a)*rr, yy=py+Math.sin(a)*rr; k?x.lineTo(xx,yy):x.moveTo(xx,yy); }
+    x.closePath(); x.fill(); x.stroke();
+  }
+  return finishTex(c, 1.8);
+}
+// material name -> texture factory (only these get a map; rest stay solid PBR)
+const TEXFOR = {
+  wall:        ()=>texNoise('#ededeb', 3.0, 9),
+  slab:        ()=>texTerrazzo(),
+  wood:        ()=>texWood('#8f5f35', 1.3),
+  wood_light:  ()=>texWood('#bf9d6e', 1.4),
+  fabric:      ()=>texFabric('#646b78', 0.7),
+  fabric_warm: ()=>texFabric('#a4937e', 0.7),
+  carpet:      ()=>texFabric('#79838f', 1.1),
+  stone:       ()=>texMarble(),
+  concrete:    ()=>texNoise('#a9a9ab', 2.6, 8),
+  bed:         ()=>texFabric('#dcd8d0', 1.0),
+  art:         ()=>texArt(),
+};
+function applyTexture(mat){
+  if(!mat || mat.userData.textured) return;
+  const f = TEXFOR[mat.name];
+  if(!f) return;
+  mat.map = f();
+  mat.color.set(0xffffff);   // colour now comes from the texture
+  mat.needsUpdate = true;
+  mat.userData.textured = true;
+}
+
 const labelRenderer = new CSS2DRenderer();
 labelRenderer.setSize(innerWidth, innerHeight);
 labelRenderer.domElement.style.position = 'absolute';
@@ -913,7 +1141,24 @@ function b64ToArrayBuffer(b64){
   return bytes.buffer;
 }
 
-let MODEL=null, ROOF=null, CENTER=new THREE.Vector3(), RADIUS=5;
+let MODEL=null, CENTER=new THREE.Vector3(), RADIUS=5, FLOOR_Y=0;
+
+// Group every mesh into a toggleable layer by its material name.
+function layerOf(name){
+  if(name==='roof') return 'roof';
+  if(name==='ceiling') return 'ceiling';
+  if(name==='wall'||name==='door'||name==='frame') return 'walls';
+  if(name==='glass'||name==='window') return 'glass';
+  if(name==='slab') return 'floor';
+  if(name==='lamp') return 'lights';
+  return 'furniture';
+}
+const BUCKETS={roof:[],ceiling:[],walls:[],glass:[],floor:[],lights:[],furniture:[]};
+const labelObjs=[];
+function setLayer(cat, vis){
+  if(cat==='labels'){ labelObjs.forEach(o=>o.visible=vis); return; }
+  (BUCKETS[cat]||[]).forEach(o=>o.visible=vis);
+}
 
 function isoView(){
   camera.position.set(CENTER.x + RADIUS*1.25, CENTER.y + RADIUS*0.95, CENTER.z + RADIUS*1.25);
@@ -923,6 +1168,37 @@ function topView(){
   camera.position.set(CENTER.x, CENTER.y + RADIUS*1.7, CENTER.z + 0.001);
   controls.target.copy(CENTER); controls.update();
 }
+function walkView(){
+  const eye = FLOOR_Y + 1.6;  // eye-level interior viewpoint
+  camera.position.set(CENTER.x, eye, CENTER.z + RADIUS*0.85);
+  controls.target.set(CENTER.x, eye, CENTER.z);
+  controls.update();
+}
+
+// WASD / ZQSD / arrows walk movement (horizontal), applied each frame.
+const move = {f:0,b:0,l:0,r:0};
+function keyAxis(k, v){
+  k = k.toLowerCase();
+  if(k==='z'||k==='w'||k==='arrowup') move.f=v;
+  else if(k==='s'||k==='arrowdown') move.b=v;
+  else if(k==='q'||k==='a'||k==='arrowleft') move.l=v;
+  else if(k==='d'||k==='arrowright') move.r=v;
+}
+addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT') return; keyAxis(e.key,1); });
+addEventListener('keyup',   e=>{ keyAxis(e.key,0); });
+const _v = new THREE.Vector3(), _dir = new THREE.Vector3(), _right = new THREE.Vector3();
+function applyMove(){
+  if(!(move.f||move.b||move.l||move.r)) return;
+  _dir.subVectors(controls.target, camera.position); _dir.y=0;
+  if(_dir.lengthSq() < 1e-6) return;
+  _dir.normalize();
+  _right.set(_dir.z, 0, -_dir.x);
+  const step = RADIUS*0.012;
+  _v.set(0,0,0);
+  _v.addScaledVector(_dir, (move.f-move.b)*step);
+  _v.addScaledVector(_right, (move.r-move.l)*step);
+  camera.position.add(_v); controls.target.add(_v);
+}
 
 const loader = new GLTFLoader();
 loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
@@ -931,10 +1207,11 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   model.traverse(o => {
     if(o.isMesh){
       o.castShadow = true; o.receiveShadow = true;
-      if(o.material && o.material.name === 'roof') ROOF = o;
-      // glass should not cast heavy shadows
-      if(o.material && (o.material.name === 'glass' || o.material.name === 'window'))
-        o.castShadow = false;
+      const nm = o.material ? o.material.name : '';
+      if(nm==='glass' || nm==='window') o.castShadow = false;  // no heavy shadows
+      if(nm==='lamp'){ o.castShadow=false; o.material.emissiveIntensity=2.2; }
+      applyTexture(o.material);
+      (BUCKETS[layerOf(nm)] || BUCKETS.furniture).push(o);
     }
   });
 
@@ -961,36 +1238,55 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   ground.receiveShadow = true;
   scene.add(ground);
 
+  FLOOR_Y = box.min.y;
   scene.fog = new THREE.Fog(SKY, radius*5, radius*18);
+
+  // Real point lights at every glowing fixture, so lamps actually cast light
+  // pools. Capped + shadowless to stay smooth on modest hardware.
+  const LAMP_CAP = 40;
+  const lamps = BUCKETS.lights.slice(0, LAMP_CAP);
+  for(const o of lamps){
+    const p = new THREE.Vector3(); o.getWorldPosition(p);
+    const L = new THREE.PointLight(0xffe7c0, radius*0.5, radius*1.4, 2.0);
+    L.position.copy(p); scene.add(L);
+  }
+  if(BUCKETS.lights.length > LAMP_CAP)
+    console.log('plan-to-3d: '+BUCKETS.lights.length+' fixtures, lit '+LAMP_CAP+' (perf cap)');
 
   for(const l of LABELS){
     const div = document.createElement('div');
     div.className = 'label'; div.textContent = l.name;
     const obj = new CSS2DObject(div);
     obj.position.set(l.x, l.y, l.z);
-    scene.add(obj);
+    scene.add(obj); labelObjs.push(obj);
+  }
+
+  // wire the layer checkboxes; hide rows whose layer is empty for this model
+  const ROWS=[['roof','roof'],['ceiling','ceiling'],['walls','walls'],
+    ['glass','glass'],['floor','floor'],['furniture','furniture'],
+    ['lights','lights'],['labels','labels']];
+  for(const [id,cat] of ROWS){
+    const el=document.getElementById('ck-'+id);
+    if(!el) continue;
+    const empty = cat==='labels' ? labelObjs.length===0 : (BUCKETS[cat]||[]).length===0;
+    if(empty){ const row=el.closest('label'); if(row) row.style.display='none'; continue; }
+    el.addEventListener('change', ()=>setLayer(cat, el.checked));
   }
 
   isoView();
 
   // Debug / scripting handle.
   window.__viewer = {THREE, scene, camera, controls, model, center, radius,
+    setLayer,
     setMaterialVisible(name, visible){
       model.traverse(o => { if(o.isMesh && o.material && o.material.name === name) o.visible = visible; });
     },
-    topDown: topView, iso: isoView};
+    topDown: topView, iso: isoView, walk: walkView};
 }, (err) => { console.error('GLB parse error', err); });
 
-// toolbar
-const btnRoof = document.getElementById('btn-roof');
-btnRoof.addEventListener('click', () => {
-  if(!ROOF) return;
-  ROOF.visible = !ROOF.visible;
-  btnRoof.textContent = ROOF.visible ? 'Hide roof' : 'Show roof';
-  btnRoof.classList.toggle('active', !ROOF.visible);
-});
 document.getElementById('btn-top').addEventListener('click', topView);
 document.getElementById('btn-iso').addEventListener('click', isoView);
+document.getElementById('btn-walk').addEventListener('click', walkView);
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
@@ -1000,6 +1296,7 @@ addEventListener('resize', () => {
 
 (function animate(){
   requestAnimationFrame(animate);
+  applyMove();
   controls.update();
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);

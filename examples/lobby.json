@@ -1,0 +1,61 @@
+{
+  "meta": {
+    "name": "Reception Lobby",
+    "units": "m",
+    "wall_height": 3.0,
+    "wall_thickness": 0.2
+  },
+  "walls": [
+    {"start": [0, 0],  "end": [16, 0], "type": "exterior"},
+    {"start": [16, 0], "end": [16, 7], "type": "exterior"},
+    {"start": [16, 7], "end": [0, 7],  "type": "exterior"},
+    {"start": [0, 7],  "end": [0, 0],  "type": "exterior", "finish": "wood"}
+  ],
+  "openings": [
+    {"wall": 0, "kind": "door",   "position": 0.18, "width": 1.8, "height": 2.4},
+    {"wall": 0, "kind": "window", "position": 0.55, "width": 4.0, "height": 2.2, "sill": 0.2},
+    {"wall": 1, "kind": "window", "position": 0.5,  "width": 3.0, "height": 1.8, "sill": 0.9}
+  ],
+  "slab": {"enabled": true, "thickness": 0.2},
+  "roof": {"type": "flat", "thickness": 0.25, "overhang": 0.0},
+  "rooms": [
+    {"name": "Accueil", "at": [8, 3.5]}
+  ],
+  "furniture": [
+    {"type": "artwork", "at": [0.14, 2.3], "size": [2.8, 0.06], "height": 2.0, "z": 0.7, "rotation": 90},
+
+    {"type": "reception_desk", "at": [11, 5.2], "size": [3.6, 0.9], "rotation": 0},
+
+    {"type": "column", "at": [4, 3.5],  "size": [0.5, 0.5], "round": true},
+    {"type": "column", "at": [8, 3.5],  "size": [0.5, 0.5], "round": true},
+    {"type": "column", "at": [12, 3.5], "size": [0.5, 0.5], "round": true},
+
+    {"type": "sconce", "at": [4, 3.1],  "z": 1.8},
+    {"type": "sconce", "at": [8, 3.1],  "z": 1.8},
+    {"type": "sconce", "at": [12, 3.1], "z": 1.8},
+
+    {"type": "ceiling", "at": [8, 3.5], "size": [15.6, 6.6], "z": 2.86, "height": 0.06},
+
+    {"type": "downlight", "at": [2, 2],  "z": 2.85},
+    {"type": "downlight", "at": [4, 2],  "z": 2.85},
+    {"type": "downlight", "at": [6, 2],  "z": 2.85},
+    {"type": "downlight", "at": [8, 2],  "z": 2.85},
+    {"type": "downlight", "at": [10, 2], "z": 2.85},
+    {"type": "downlight", "at": [12, 2], "z": 2.85},
+    {"type": "downlight", "at": [14, 2], "z": 2.85},
+    {"type": "downlight", "at": [2, 5],  "z": 2.85},
+    {"type": "downlight", "at": [4, 5],  "z": 2.85},
+    {"type": "downlight", "at": [6, 5],  "z": 2.85},
+    {"type": "downlight", "at": [8, 5],  "z": 2.85},
+    {"type": "downlight", "at": [10, 5], "z": 2.85},
+    {"type": "downlight", "at": [12, 5], "z": 2.85},
+    {"type": "downlight", "at": [14, 5], "z": 2.85},
+
+    {"type": "bench", "at": [14.4, 2.0], "size": [1.8, 0.45], "rotation": 0},
+    {"type": "bench", "at": [14.4, 4.0], "size": [1.8, 0.45], "rotation": 0},
+
+    {"type": "plant_large", "at": [1.2, 6.3]},
+    {"type": "plant_large", "at": [15.2, 6.3]},
+    {"type": "plant", "at": [6.5, 5.6]}
+  ]
+}
