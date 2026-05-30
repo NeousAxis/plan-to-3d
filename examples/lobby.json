@@ -3,7 +3,8 @@
     "name": "Reception Lobby",
     "units": "m",
     "wall_height": 3.0,
-    "wall_thickness": 0.2
+    "wall_thickness": 0.2,
+    "art_hue": 225
   },
   "walls": [
     {"start": [0, 0],  "end": [16, 0], "type": "exterior"},
@@ -22,7 +23,7 @@
     {"name": "Accueil", "at": [8, 3.5]}
   ],
   "furniture": [
-    {"type": "artwork", "at": [0.14, 2.3], "size": [2.8, 0.06], "height": 2.0, "z": 0.7, "rotation": 90},
+    {"type": "artwork", "at": [0.14, 2.3], "size": [2.0, 0.06], "height": 2.0, "z": 0.6, "rotation": 90},
 
     {"type": "reception_desk", "at": [11, 5.2], "size": [3.6, 0.9], "rotation": 0},
 
@@ -34,7 +35,8 @@
     {"type": "sconce", "at": [0.10, 5.0], "z": 1.85, "rotation": 90},
     {"type": "sconce", "at": [0.10, 6.0], "z": 1.85, "rotation": 90},
 
-    {"type": "ceiling", "at": [8, 3.5], "size": [15.6, 6.6], "z": 2.86, "height": 0.06, "perforated": true},
+    {"type": "ceiling", "at": [4, 3.5],  "size": [7.5, 6.6], "z": 2.86, "height": 0.06, "finish": "dark_panels"},
+    {"type": "ceiling", "at": [12, 3.5], "size": [7.5, 6.6], "z": 2.86, "height": 0.06, "finish": "perforated"},
 
     {"type": "downlight", "at": [2, 2],  "z": 2.85},
     {"type": "downlight", "at": [4, 2],  "z": 2.85},

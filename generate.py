@@ -76,6 +76,8 @@ MATERIALS = {
     "ceiling":    _mat([0.82, 0.83, 0.85, 1.0], rough=0.5, metal=0.25),
     "ceiling_perf":_mat([0.82, 0.83, 0.85, 1.0], rough=0.45, metal=0.35,
                         alpha="BLEND"),  # perforated metal panel
+    "ceiling_dark":_mat([0.18, 0.19, 0.21, 1.0], rough=0.55, metal=0.30),
+    "art_frame":  _mat([0.86, 0.18, 0.20, 1.0], rough=0.45),  # vivid bezel
     "art":        _mat([0.55, 0.55, 0.57, 1.0], rough=0.55),  # textured in viewer
 }
 
@@ -167,29 +169,36 @@ EPS = 1e-6
 # ---------------------------------------------------------------------------
 class MeshBuilder:
     def __init__(self):
-        # material name -> {"positions": [...], "normals": [...], "indices": [...]}
-        self.groups = {name: {"positions": [], "normals": [], "indices": []}
+        # material name -> {positions, normals, indices, uvs}. uvs entries are
+        # either None (use the world-space triplanar projection in write_glb) or
+        # an explicit (u, v) pair (used for hero surfaces like artwork canvases
+        # that must show a single, well-framed image instead of a tile).
+        self.groups = {name: {"positions": [], "normals": [], "indices": [],
+                              "uvs": []}
                        for name in MATERIALS}
 
-    def _add_face(self, material, verts):
-        """verts: list of 3 or 4 (x,y,z) points, planar, defining a polygon."""
+    def _add_face(self, material, verts, uvs=None):
+        """verts: list of 3 or 4 (x,y,z) points, planar, defining a polygon.
+        uvs (optional): same-length list of (u, v) pairs overriding the
+        default triplanar projection on those vertices."""
         g = self.groups[material]
         base = len(g["positions"])
         n = _normal(verts[0], verts[1], verts[2])
-        for v in verts:
+        for k, v in enumerate(verts):
             g["positions"].append([float(v[0]), float(v[1]), float(v[2])])
             g["normals"].append(n)
+            g["uvs"].append(tuple(uvs[k]) if uvs else None)
         if len(verts) == 3:
             g["indices"] += [base, base + 1, base + 2]
         else:  # quad -> 2 triangles
             g["indices"] += [base, base + 1, base + 2,
                              base, base + 2, base + 3]
 
-    def add_quad(self, material, p0, p1, p2, p3):
-        self._add_face(material, [p0, p1, p2, p3])
+    def add_quad(self, material, p0, p1, p2, p3, uvs=None):
+        self._add_face(material, [p0, p1, p2, p3], uvs)
 
-    def add_tri(self, material, p0, p1, p2):
-        self._add_face(material, [p0, p1, p2])
+    def add_tri(self, material, p0, p1, p2, uvs=None):
+        self._add_face(material, [p0, p1, p2], uvs)
 
     def add_box8(self, material, c):
         """c: 8 corners. 0-3 bottom ring, 4-7 top ring (4 above 0, etc.)."""
@@ -664,14 +673,39 @@ def b_bench(mesh, fr, w, d, h, z0, item, mat):
 def b_artwork(mesh, fr, w, d, h, z0, item, mat):
     base = z0 if z0 > EPS else 1.0
     t = max(d, 0.04)
-    box_local(mesh, "dark", fr, -w / 2, -t / 2, w / 2, t / 2, base, base + h)  # frame
-    box_local(mesh, "art", fr, -w / 2 + 0.06, -t / 2 - 0.01, w / 2 - 0.06, -t / 2,
-              base + 0.06, base + h - 0.06)  # canvas, just proud of the frame
+    frame_mat = item.get("frame_material", "art_frame")
+    box_local(mesh, frame_mat, fr, -w / 2, -t / 2, w / 2, t / 2, base, base + h)
+    # The canvas IS the artwork. Emit a single front-facing quad with explicit
+    # UVs (0,0)..(1,1) so the texture maps to ONE image on the surface, not a
+    # tile. Convention: front of the artwork is the -Y face in the local frame.
+    pad = 0.06
+    x0, x1 = -w / 2 + pad, w / 2 - pad
+    yf = -t / 2 - 0.005
+    z_lo, z_hi = base + pad, base + h - pad
+    p0 = fr.xy(x0, yf)
+    p1 = fr.xy(x1, yf)
+    # Two triangles forming a quad: bottom-left, bottom-right, top-right, top-left
+    # Wound so the face faces away from +Y (i.e. towards the room).
+    mesh.add_quad("art",
+                  (p1[0], z_lo, p1[1]),
+                  (p0[0], z_lo, p0[1]),
+                  (p0[0], z_hi, p0[1]),
+                  (p1[0], z_hi, p1[1]),
+                  # Reference samples: darkest cell at upper-RIGHT, lightest
+                  # at lower-LEFT (diagonal '/'). Mirror U vs. the obvious
+                  # mapping to flip the diagonal direction.
+                  uvs=[(0, 0), (1, 0), (1, 1), (0, 1)])
 
 
 def b_ceiling_panel(mesh, fr, w, d, h, z0, item, mat):
     base = z0 if z0 > EPS else 2.9
-    cm = "ceiling_perf" if item.get("perforated") else "ceiling"
+    finish = item.get("finish")
+    if finish == "dark_panels":
+        cm = "ceiling_dark"
+    elif finish == "perforated" or item.get("perforated"):
+        cm = "ceiling_perf"
+    else:
+        cm = "ceiling"
     box_local(mesh, cm, fr, -w / 2, -d / 2, w / 2, d / 2, base, base + h)
 
 
@@ -984,12 +1018,15 @@ def write_glb(mesh):
         })
         nrm_acc = len(accessors) - 1
 
-        # texcoords (float32 vec2): world-space triplanar projection in metres.
-        # Each face has a constant normal (flat shading), so projecting onto the
-        # plane perpendicular to the dominant normal axis gives clean, seam-free
-        # tiling. The viewer scales tiling per-material via texture.repeat.
+        # texcoords (float32 vec2): per-vertex explicit UVs when supplied
+        # (artwork canvas etc.), otherwise world-space triplanar projection in
+        # metres. The viewer scales tiling per-material via texture.repeat.
         uvs = []
+        gu = g["uvs"]
         for k in range(len(positions)):
+            if gu[k] is not None:
+                uvs.append(gu[k])
+                continue
             px, py, pz = positions[k]
             nx, ny, nz = normals[k]
             ax, ay, az = abs(nx), abs(ny), abs(nz)
@@ -1158,6 +1195,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 const GLB_B64 = "__GLB_B64__";
 const LABELS = __LABELS__;
 const PEOPLE = __PEOPLE__;
+window.__artHue = __ART_HUE__;
 const SKY = 0xe9edf2;
 
 const app = document.getElementById('app');
@@ -1275,23 +1313,58 @@ function texPerforated(){
   t.repeat.set(1/0.5, 1/0.5);
   return t;
 }
-function texArt(){
-  // bold, abstract, Dubuffet-ish: outlined colour cells (non-figurative, so it
-  // reads fine whatever the world-UV offset is)
-  const s=512, c=mkCanvas(s), x=c.getContext('2d');
-  x.fillStyle='#f1eee7'; x.fillRect(0,0,s,s);
-  const cols=['#bd3026','#2e4a8b','#e1b12c','#c8cdd2','#111111','#d35400',
-              '#2a8f5a','#7d4fa0','#e8edf0'];
-  x.lineWidth=2.5; x.strokeStyle='#141414';
-  for(let i=0;i<140;i++){
-    x.fillStyle=cols[(Math.random()*cols.length)|0];
-    const px=Math.random()*s, py=Math.random()*s, n=4+(Math.random()*4|0), r=18+Math.random()*60;
-    x.beginPath();
-    for(let k=0;k<n;k++){ const a=k/n*6.283+Math.random()*0.5, rr=r*(0.5+Math.random()*0.8);
-      const xx=px+Math.cos(a)*rr, yy=py+Math.sin(a)*rr; k?x.lineTo(xx,yy):x.moveTo(xx,yy); }
-    x.closePath(); x.fill(); x.stroke();
+function texArt(hue){
+  // Pixelated Rothko-style canvas — a 4x4 grid of monochrome cells with a
+  // diagonal lightness gradient (top-right = darkest, bottom-left = lightest),
+  // in the user's own art style. `hue` is HSL degrees (default = blue).
+  const H = (typeof hue === 'number' ? hue : 225);
+  const s = 512, c = mkCanvas(s), x = c.getContext('2d');
+  // background — the canvas behind the cells (rare slivers if cells underfit)
+  x.fillStyle = `hsl(${H}, 60%, 50%)`; x.fillRect(0,0,s,s);
+  const N = 4, cell = s / N;
+  for (let row = 0; row < N; row++) {
+    for (let col = 0; col < N; col++) {
+      // top-right = darkest, bottom-left = lightest (matches the user's
+      // own samples). row=0 is top, col=0 is left on a canvas.
+      // distance to top-right: row goes UP from 0 to N-1, (N-1-col) goes UP.
+      const t = (row + (N - 1 - col)) / (2 * (N - 1));      // 0=TR (dark), 1=BL (light)
+      const L = 22 + t * 48;                                // 22% .. 70% L
+      const S = 72 + Math.random() * 18;
+      x.fillStyle = `hsl(${H}, ${S|0}%, ${L|0}%)`;
+      x.fillRect(col * cell, row * cell, Math.ceil(cell), Math.ceil(cell));
+    }
   }
-  return finishTex(c, 1.8);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = maxAniso;
+  // Explicit UVs (0..1) are emitted by b_artwork — no world-space tiling here.
+  t.repeat.set(1, 1);
+  return t;
+}
+function texCeilingDark(){
+  // Anthracite ceiling tiles with a faint geometric (triangular) pattern —
+  // matches the dark, design ceiling panels in the reference photo (the half
+  // that ISN'T the perforated metal).
+  const s = 256, c = mkCanvas(s), x = c.getContext('2d');
+  x.fillStyle = '#22252a'; x.fillRect(0,0,s,s);
+  // panel grid lines
+  x.strokeStyle = 'rgba(0,0,0,0.6)'; x.lineWidth = 2;
+  for(let i=0;i<=s;i+=s/4){
+    x.beginPath(); x.moveTo(i,0); x.lineTo(i,s); x.stroke();
+    x.beginPath(); x.moveTo(0,i); x.lineTo(s,i); x.stroke();
+  }
+  // sparse darker triangles inside the cells
+  x.fillStyle = 'rgba(8,9,11,0.7)';
+  for(let i=0;i<30;i++){
+    const px = Math.random()*s, py = Math.random()*s, r = 10 + Math.random()*22;
+    x.beginPath();
+    x.moveTo(px, py - r);
+    x.lineTo(px + r*0.87, py + r*0.5);
+    x.lineTo(px - r*0.87, py + r*0.5);
+    x.closePath(); x.fill();
+  }
+  return finishTex(c, 1.0);
 }
 // material name -> texture factory (only these get a map; rest stay solid PBR)
 const TEXFOR = {
@@ -1305,8 +1378,9 @@ const TEXFOR = {
   stone:       ()=>texMarble(),
   concrete:    ()=>texNoise('#a9a9ab', 2.6, 8),
   bed:         ()=>texFabric('#dcd8d0', 1.0),
-  art:         ()=>texArt(),
+  art:         ()=>texArt(window.__artHue ?? 225),
   ceiling_perf:()=>texPerforated(),
+  ceiling_dark:()=>texCeilingDark(),
 };
 // Silhouette billboard for "entourage" figures (the semi-transparent ghosts
 // in arch-viz). Drawn once on a canvas, reused as a Sprite per person.
@@ -1376,6 +1450,13 @@ function applyTexture(mat){
     mat.transparent = true;
     mat.alphaTest = 0.5;
     mat.side = THREE.DoubleSide;
+  } else if(mat.name === 'art'){
+    // The artwork reads in a dimly-lit reception even without a direct spot.
+    // A faint emissive of the same texture lets the painting glow with its
+    // own colours, like a backlit gallery panel.
+    mat.emissiveMap = t;
+    mat.emissive = new THREE.Color(0xffffff);
+    mat.emissiveIntensity = 0.65;
   }
   mat.needsUpdate = true;
   mat.userData.textured = true;
@@ -1431,7 +1512,7 @@ let MODEL=null, CENTER=new THREE.Vector3(), RADIUS=5, FLOOR_Y=0;
 // Group every mesh into a toggleable layer by its material name.
 function layerOf(name){
   if(name==='roof') return 'roof';
-  if(name==='ceiling') return 'ceiling';
+  if(name==='ceiling'||name==='ceiling_perf'||name==='ceiling_dark') return 'ceiling';
   if(name==='wall'||name==='door'||name==='frame') return 'walls';
   if(name==='glass'||name==='window') return 'glass';
   if(name==='concrete') return 'structure';   // load-bearing columns / shear walls
@@ -1722,7 +1803,7 @@ addEventListener('resize', () => {
 """
 
 
-def write_viewer(glb_bytes, rooms, title, people=None):
+def write_viewer(glb_bytes, rooms, title, people=None, art_hue=225):
     b64 = base64.b64encode(glb_bytes).decode("ascii")
     labels = json.dumps(rooms, ensure_ascii=False)
     people_json = json.dumps(people or [], ensure_ascii=False)
@@ -1730,7 +1811,8 @@ def write_viewer(glb_bytes, rooms, title, people=None):
             .replace("__TITLE__", title)
             .replace("__GLB_B64__", b64)
             .replace("__LABELS__", labels)
-            .replace("__PEOPLE__", people_json))
+            .replace("__PEOPLE__", people_json)
+            .replace("__ART_HUE__", str(int(art_hue))))
     return html
 
 
@@ -1839,8 +1921,9 @@ def main():
         f.write(glb)
 
     viewer_path = os.path.join(args.out, "viewer.html")
+    art_hue = int(spec.get("meta", {}).get("art_hue", 225))
     with open(viewer_path, "w", encoding="utf-8") as f:
-        f.write(write_viewer(glb, rooms, title, collect_people(spec)))
+        f.write(write_viewer(glb, rooms, title, collect_people(spec), art_hue))
 
     tri = sum(len(mesh.groups[m]["indices"]) // 3 for m in MATERIALS)
     print("model:   %s (%d bytes)" % (glb_path, len(glb)))
