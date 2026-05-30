@@ -31,63 +31,112 @@ import sys
 # ---------------------------------------------------------------------------
 # Materials (baseColorFactor RGBA, alphaMode, doubleSided)
 # ---------------------------------------------------------------------------
+def _mat(color, rough=0.85, metal=0.0, alpha="OPAQUE", emissive=None):
+    m = {"color": color, "roughness": rough, "metalness": metal, "alpha": alpha}
+    if emissive:
+        m["emissive"] = emissive
+    return m
+
+
+# Each material is a PBR bucket: baseColor RGBA + roughness/metalness, an
+# optional emissive (for screens), and an alpha mode. Geometry is batched per
+# material name, so adding instance colours would mean new buckets.
 MATERIALS = {
-    "wall":      {"color": [0.86, 0.85, 0.82, 1.0], "alpha": "OPAQUE"},
-    "slab":      {"color": [0.55, 0.55, 0.57, 1.0], "alpha": "OPAQUE"},
-    "roof":      {"color": [0.66, 0.26, 0.20, 1.0], "alpha": "OPAQUE"},
-    "window":    {"color": [0.52, 0.72, 0.90, 0.45], "alpha": "BLEND"},
-    "door":      {"color": [0.45, 0.30, 0.18, 1.0], "alpha": "OPAQUE"},
-    # Interior furniture / fixtures / stairs (one bucket per visual family)
-    "bed":       {"color": [0.82, 0.74, 0.62, 1.0], "alpha": "OPAQUE"},
-    "seat":      {"color": [0.32, 0.38, 0.46, 1.0], "alpha": "OPAQUE"},
-    "table":     {"color": [0.52, 0.36, 0.24, 1.0], "alpha": "OPAQUE"},
-    "counter":   {"color": [0.78, 0.66, 0.50, 1.0], "alpha": "OPAQUE"},
-    "appliance": {"color": [0.62, 0.64, 0.68, 1.0], "alpha": "OPAQUE"},
-    "sanitary":  {"color": [0.93, 0.94, 0.95, 1.0], "alpha": "OPAQUE"},
-    "stairs":    {"color": [0.70, 0.70, 0.72, 1.0], "alpha": "OPAQUE"},
-    "rug":       {"color": [0.50, 0.30, 0.32, 1.0], "alpha": "OPAQUE"},
-    "furniture": {"color": [0.55, 0.50, 0.45, 1.0], "alpha": "OPAQUE"},
+    # --- shell ---
+    "wall":       _mat([0.91, 0.90, 0.88, 1.0], rough=0.93),
+    "slab":       _mat([0.62, 0.62, 0.64, 1.0], rough=0.95),
+    "roof":       _mat([0.66, 0.26, 0.20, 1.0], rough=0.85),
+    "glass":      _mat([0.60, 0.76, 0.90, 0.20], rough=0.05, alpha="BLEND"),
+    "window":     _mat([0.60, 0.76, 0.90, 0.28], rough=0.05, alpha="BLEND"),
+    "frame":      _mat([0.28, 0.29, 0.31, 1.0], rough=0.4, metal=0.7),
+    "door":       _mat([0.56, 0.41, 0.27, 1.0], rough=0.55),
+    # --- furniture / fixture families ---
+    "wood":       _mat([0.55, 0.40, 0.27, 1.0], rough=0.6),
+    "wood_light": _mat([0.80, 0.66, 0.47, 1.0], rough=0.55),
+    "white":      _mat([0.92, 0.92, 0.93, 1.0], rough=0.5),
+    "fabric":     _mat([0.42, 0.45, 0.52, 1.0], rough=0.96),
+    "fabric_warm":_mat([0.66, 0.60, 0.52, 1.0], rough=0.96),
+    "metal":      _mat([0.55, 0.56, 0.58, 1.0], rough=0.35, metal=0.9),
+    "dark":       _mat([0.15, 0.16, 0.18, 1.0], rough=0.5),
+    "screen":     _mat([0.04, 0.05, 0.07, 1.0], rough=0.2,
+                       emissive=[0.05, 0.09, 0.15]),
+    "stone":      _mat([0.82, 0.81, 0.78, 1.0], rough=0.65),  # worktops
+    "concrete":   _mat([0.66, 0.66, 0.67, 1.0], rough=0.9),   # columns
+    "plant":      _mat([0.33, 0.52, 0.29, 1.0], rough=0.85),
+    "plant_dark": _mat([0.21, 0.39, 0.21, 1.0], rough=0.85),
+    "pot":        _mat([0.42, 0.40, 0.38, 1.0], rough=0.8),
+    "carpet":     _mat([0.48, 0.54, 0.60, 1.0], rough=1.0),
+    "appliance":  _mat([0.80, 0.81, 0.83, 1.0], rough=0.3, metal=0.45),
+    "sanitary":   _mat([0.95, 0.96, 0.97, 1.0], rough=0.25),
+    "bed":        _mat([0.87, 0.85, 0.81, 1.0], rough=0.9),
+    "stairs":     _mat([0.74, 0.74, 0.76, 1.0], rough=0.8),
 }
 
-# Per-type defaults: footprint [w, d] in m, height in m, and which material
-# bucket (color) the item belongs to. Types not listed here fall back to
-# "furniture" with a generic 1x1x0.8 box.
+# Per-type defaults: footprint [w, d, h] in metres plus the component
+# "builder" that renders it (composed multi-part furniture, not a flat box).
+# A few simple items pin a "material". Unknown types fall back to "generic".
 FURNITURE_TYPES = {
-    "bed":             {"size": [1.6, 2.0, 0.5], "material": "bed"},
-    "single_bed":      {"size": [0.9, 2.0, 0.5], "material": "bed"},
-    "double_bed":      {"size": [1.6, 2.0, 0.5], "material": "bed"},
-    "king_bed":        {"size": [1.8, 2.0, 0.5], "material": "bed"},
-    "sofa":            {"size": [2.2, 0.95, 0.85], "material": "seat"},
-    "armchair":        {"size": [0.9, 0.9, 0.85], "material": "seat"},
-    "chair":           {"size": [0.45, 0.45, 0.9], "material": "seat"},
-    "stool":           {"size": [0.4, 0.4, 0.75], "material": "seat"},
-    "coffee_table":    {"size": [1.2, 0.6, 0.45], "material": "table"},
-    "dining_table":    {"size": [1.6, 0.9, 0.75], "material": "table"},
-    "table":           {"size": [1.2, 0.8, 0.75], "material": "table"},
-    "desk":            {"size": [1.4, 0.7, 0.75], "material": "table"},
-    "nightstand":      {"size": [0.45, 0.4, 0.55], "material": "table"},
-    "counter":         {"size": [2.0, 0.6, 0.9], "material": "counter"},
-    "kitchen_counter": {"size": [2.0, 0.6, 0.9], "material": "counter"},
-    "island":          {"size": [2.0, 1.0, 0.9], "material": "counter"},
-    "cabinet":         {"size": [0.8, 0.4, 0.9], "material": "counter"},
-    "wardrobe":        {"size": [1.5, 0.6, 2.0], "material": "counter"},
-    "closet":          {"size": [1.5, 0.6, 2.0], "material": "counter"},
-    "bookshelf":       {"size": [1.0, 0.3, 1.8], "material": "counter"},
-    "fridge":          {"size": [0.7, 0.7, 1.8], "material": "appliance"},
-    "stove":           {"size": [0.6, 0.6, 0.9], "material": "appliance"},
-    "oven":            {"size": [0.6, 0.6, 0.9], "material": "appliance"},
-    "dishwasher":      {"size": [0.6, 0.6, 0.85], "material": "appliance"},
-    "washing_machine": {"size": [0.6, 0.6, 0.85], "material": "appliance"},
-    "tv":              {"size": [1.2, 0.1, 0.7], "material": "appliance"},
-    "sink":            {"size": [0.6, 0.45, 0.9], "material": "sanitary"},
-    "kitchen_sink":    {"size": [0.8, 0.5, 0.9], "material": "sanitary"},
-    "toilet":          {"size": [0.4, 0.65, 0.4], "material": "sanitary"},
-    "bathtub":         {"size": [1.7, 0.75, 0.55], "material": "sanitary"},
-    "shower":          {"size": [0.9, 0.9, 0.1],  "material": "sanitary"},
-    "bidet":           {"size": [0.4, 0.55, 0.4], "material": "sanitary"},
-    "stairs":          {"size": [1.0, 3.0, 2.7], "material": "stairs"},
-    "rug":             {"size": [2.0, 1.5, 0.015], "material": "rug"},
-    "generic":         {"size": [1.0, 1.0, 0.8], "material": "furniture"},
+    # beds
+    "bed":             {"size": [1.6, 2.0, 0.5],  "builder": "bed"},
+    "single_bed":      {"size": [0.9, 2.0, 0.5],  "builder": "bed"},
+    "double_bed":      {"size": [1.6, 2.0, 0.5],  "builder": "bed"},
+    "king_bed":        {"size": [1.8, 2.0, 0.5],  "builder": "bed"},
+    # seating
+    "sofa":            {"size": [2.2, 0.95, 0.8], "builder": "sofa"},
+    "sofa_l":          {"size": [2.6, 2.0, 0.8],  "builder": "sofa"},
+    "armchair":        {"size": [0.9, 0.9, 0.8],  "builder": "armchair"},
+    "chair":           {"size": [0.5, 0.5, 0.9],  "builder": "chair"},
+    "office_chair":    {"size": [0.62, 0.62, 1.1],"builder": "office_chair"},
+    "stool":           {"size": [0.4, 0.4, 0.75], "builder": "stool"},
+    # tables / desks
+    "coffee_table":    {"size": [1.1, 0.6, 0.4],  "builder": "table"},
+    "side_table":      {"size": [0.5, 0.5, 0.5],  "builder": "table"},
+    "dining_table":    {"size": [1.6, 0.9, 0.74], "builder": "table_chairs"},
+    "table":           {"size": [1.4, 0.8, 0.74], "builder": "table"},
+    "conference_table":{"size": [3.6, 1.2, 0.74], "builder": "table_chairs"},
+    "meeting_table":   {"size": [2.4, 1.1, 0.74], "builder": "table_chairs"},
+    "round_table":     {"size": [1.2, 1.2, 0.74], "builder": "round_table"},
+    "desk":            {"size": [1.4, 0.7, 0.74], "builder": "desk"},
+    "office_desk":     {"size": [1.6, 0.8, 0.74], "builder": "office_desk"},
+    "desk_bench":      {"size": [3.2, 1.6, 0.74], "builder": "desk_bench"},
+    "workstation":     {"size": [3.2, 1.6, 0.74], "builder": "desk_bench"},
+    "nightstand":      {"size": [0.45, 0.4, 0.5], "builder": "box", "material": "wood"},
+    # storage / kitchen
+    "counter":         {"size": [2.0, 0.6, 0.9],  "builder": "kitchen"},
+    "kitchen_counter": {"size": [2.0, 0.6, 0.9],  "builder": "kitchen"},
+    "kitchenette":     {"size": [2.4, 0.6, 0.9],  "builder": "kitchen"},
+    "island":          {"size": [2.0, 1.0, 0.9],  "builder": "kitchen"},
+    "cabinet":         {"size": [0.9, 0.45, 1.1], "builder": "cabinet"},
+    "shelving":        {"size": [1.2, 0.4, 1.8],  "builder": "cabinet"},
+    "bookshelf":       {"size": [1.0, 0.3, 1.8],  "builder": "cabinet"},
+    "wardrobe":        {"size": [1.5, 0.6, 2.0],  "builder": "cabinet"},
+    "closet":          {"size": [1.5, 0.6, 2.0],  "builder": "cabinet"},
+    "lockers":         {"size": [1.2, 0.5, 1.9],  "builder": "cabinet"},
+    "credenza":        {"size": [1.6, 0.45, 0.8], "builder": "cabinet"},
+    # appliances / electronics
+    "fridge":          {"size": [0.7, 0.7, 1.8],  "builder": "box", "material": "appliance"},
+    "stove":           {"size": [0.6, 0.6, 0.9],  "builder": "box", "material": "appliance"},
+    "oven":            {"size": [0.6, 0.6, 0.9],  "builder": "box", "material": "appliance"},
+    "dishwasher":      {"size": [0.6, 0.6, 0.85], "builder": "box", "material": "appliance"},
+    "washing_machine": {"size": [0.6, 0.6, 0.85], "builder": "box", "material": "appliance"},
+    "tv":              {"size": [1.3, 0.08, 0.75],"builder": "tv"},
+    "screen":          {"size": [1.6, 0.08, 0.9], "builder": "tv"},
+    # sanitary
+    "sink":            {"size": [0.6, 0.45, 0.85],"builder": "box", "material": "sanitary"},
+    "kitchen_sink":    {"size": [0.8, 0.5, 0.9],  "builder": "box", "material": "sanitary"},
+    "toilet":          {"size": [0.4, 0.65, 0.4], "builder": "box", "material": "sanitary"},
+    "bathtub":         {"size": [1.7, 0.75, 0.55],"builder": "box", "material": "sanitary"},
+    "shower":          {"size": [0.9, 0.9, 0.05], "builder": "box", "material": "sanitary"},
+    "bidet":           {"size": [0.4, 0.55, 0.4], "builder": "box", "material": "sanitary"},
+    # misc
+    "plant":           {"size": [0.5, 0.5, 1.2],  "builder": "plant"},
+    "plant_large":     {"size": [0.7, 0.7, 1.7],  "builder": "plant"},
+    "column":          {"size": [0.4, 0.4, 2.7],  "builder": "column"},
+    "partition":       {"size": [1.6, 0.06, 1.8], "builder": "box", "material": "glass"},
+    "stairs":          {"size": [1.0, 3.0, 2.7],  "builder": "stairs"},
+    "rug":             {"size": [2.0, 1.5, 0.02], "builder": "box", "material": "carpet"},
+    "carpet":          {"size": [2.0, 1.5, 0.02], "builder": "box", "material": "carpet"},
+    "generic":         {"size": [1.0, 1.0, 0.8],  "builder": "box", "material": "wood"},
 }
 
 EPS = 1e-6
@@ -177,61 +226,293 @@ def aabb_box(mesh, material, minx, miny, maxx, maxy, z0, z1):
     mesh.add_box8(material, corners)
 
 
-def oriented_furniture_box(mesh, material, center, size_xy, rotation_deg, z0, z1):
-    """Axis-aligned box rotated `rotation_deg` around the vertical axis
-    about `center` (plan coords). size_xy = [width along local X, depth along local Y]."""
-    cx, cy = center
-    w, d = size_xy
-    if w < EPS or d < EPS or (z1 - z0) < EPS:
+# ===========================================================================
+# Furniture component system
+# ---------------------------------------------------------------------------
+# Every item has a local frame centred on its footprint, with +X along its
+# width and +Y along its depth, rotated by `rotation` degrees in plan. Builders
+# emit boxes / cylinders in that local frame; helpers transform to world.
+# Convention: an item's "front" (where a person sits / the open face) is -Y,
+# its "back" (headboard, monitor, backrest, wall side) is +Y.
+# ===========================================================================
+class Frame:
+    def __init__(self, cx, cy, rot_deg):
+        self.cx, self.cy = cx, cy
+        self.rot = rot_deg
+        a = math.radians(rot_deg)
+        self.ca, self.sa = math.cos(a), math.sin(a)
+
+    def xy(self, lx, ly):
+        return (self.cx + lx * self.ca - ly * self.sa,
+                self.cy + lx * self.sa + ly * self.ca)
+
+
+def child_frame(fr, lx, ly, drot):
+    """A new frame centred at local (lx, ly) of `fr`, rotated by `drot` more."""
+    wc = fr.xy(lx, ly)
+    return Frame(wc[0], wc[1], fr.rot + drot)
+
+
+def box_local(mesh, mat, fr, x0, y0, x1, y1, z0, z1):
+    """A box spanning local rectangle (x0,y0)-(x1,y1), z0..z1, in frame `fr`."""
+    if x1 < x0:
+        x0, x1 = x1, x0
+    if y1 < y0:
+        y0, y1 = y1, y0
+    if (x1 - x0) < EPS or (y1 - y0) < EPS or (z1 - z0) < EPS:
         return
-    angle = math.radians(rotation_deg)
-    ca, sa = math.cos(angle), math.sin(angle)
-    hw, hd = w / 2.0, d / 2.0
-    local = [(-hw, -hd), (hw, -hd), (hw, hd), (-hw, hd)]
-    pts = []
-    for lx, ly in local:
-        rx = cx + lx * ca - ly * sa
-        ry = cy + lx * sa + ly * ca
-        pts.append((rx, ry))
+    p = [fr.xy(x0, y0), fr.xy(x1, y0), fr.xy(x1, y1), fr.xy(x0, y1)]
     corners = [
-        (pts[0][0], z0, pts[0][1]), (pts[1][0], z0, pts[1][1]),
-        (pts[2][0], z0, pts[2][1]), (pts[3][0], z0, pts[3][1]),
-        (pts[0][0], z1, pts[0][1]), (pts[1][0], z1, pts[1][1]),
-        (pts[2][0], z1, pts[2][1]), (pts[3][0], z1, pts[3][1]),
+        (p[0][0], z0, p[0][1]), (p[1][0], z0, p[1][1]),
+        (p[2][0], z0, p[2][1]), (p[3][0], z0, p[3][1]),
+        (p[0][0], z1, p[0][1]), (p[1][0], z1, p[1][1]),
+        (p[2][0], z1, p[2][1]), (p[3][0], z1, p[3][1]),
     ]
-    mesh.add_box8(material, corners)
+    mesh.add_box8(mat, corners)
+
+
+def cyl_local(mesh, mat, fr, lcx, lcy, r, z0, z1, segs=16):
+    """An upright n-gon prism (cylinder) centred at local (lcx, lcy)."""
+    if r < EPS or (z1 - z0) < EPS:
+        return
+    pts = []
+    for i in range(segs):
+        ang = 2.0 * math.pi * i / segs
+        pts.append(fr.xy(lcx + r * math.cos(ang), lcy + r * math.sin(ang)))
+    cb = fr.xy(lcx, lcy)
+    for i in range(segs):
+        j = (i + 1) % segs
+        a, b = pts[i], pts[j]
+        mesh.add_quad(mat, (a[0], z0, a[1]), (b[0], z0, b[1]),
+                      (b[0], z1, b[1]), (a[0], z1, a[1]))
+        mesh.add_tri(mat, (cb[0], z1, cb[1]), (a[0], z1, a[1]), (b[0], z1, b[1]))
+        mesh.add_tri(mat, (cb[0], z0, cb[1]), (b[0], z0, b[1]), (a[0], z0, a[1]))
 
 
 def build_stairs(mesh, material, center, width, run, rotation_deg, z0, total_rise, n_steps):
-    """Render a flight of stairs climbing along local +Y from -run/2 to +run/2.
-    Each tread is a solid block from the floor (z0) up to its own top, so the
-    overall silhouette is a clean ascending staircase."""
+    """A flight of stairs climbing along local +Y; each tread is a solid block
+    from the floor up to its own top, giving a clean ascending silhouette."""
     if n_steps < 1 or run < EPS or total_rise < EPS:
         return
-    cx, cy = center
+    fr = Frame(center[0], center[1], rotation_deg)
     step_run = run / n_steps
     step_rise = total_rise / n_steps
-    angle = math.radians(rotation_deg)
-    ca, sa = math.cos(angle), math.sin(angle)
     hw = width / 2.0
     half_run = run / 2.0
     for i in range(n_steps):
         y0 = -half_run + i * step_run
         y1 = y0 + step_run
-        top_z = z0 + (i + 1) * step_rise
-        local = [(-hw, y0), (hw, y0), (hw, y1), (-hw, y1)]
-        pts = []
-        for lx, ly in local:
-            rx = cx + lx * ca - ly * sa
-            ry = cy + lx * sa + ly * ca
-            pts.append((rx, ry))
-        corners = [
-            (pts[0][0], z0, pts[0][1]), (pts[1][0], z0, pts[1][1]),
-            (pts[2][0], z0, pts[2][1]), (pts[3][0], z0, pts[3][1]),
-            (pts[0][0], top_z, pts[0][1]), (pts[1][0], top_z, pts[1][1]),
-            (pts[2][0], top_z, pts[2][1]), (pts[3][0], top_z, pts[3][1]),
-        ]
-        mesh.add_box8(material, corners)
+        box_local(mesh, material, fr, -hw, y0, hw, y1, z0, z0 + (i + 1) * step_rise)
+
+
+# --- individual component builders --------------------------------------
+# signature: (mesh, fr, w, d, h, z0, item, mat)
+def b_box(mesh, fr, w, d, h, z0, item, mat):
+    box_local(mesh, mat, fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + h)
+
+
+def b_bed(mesh, fr, w, d, h, z0, item, mat):
+    box_local(mesh, "wood", fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + h * 0.35)
+    m = 0.04
+    box_local(mesh, "bed", fr, -w / 2 + m, -d / 2 + m, w / 2 - m, d / 2 - m,
+              z0 + h * 0.35, z0 + h)
+    pw = w * 0.40
+    box_local(mesh, "white", fr, -pw - 0.03, d / 2 - 0.5, -0.03, d / 2 - 0.15,
+              z0 + h, z0 + h + 0.08)
+    box_local(mesh, "white", fr, 0.03, d / 2 - 0.5, pw + 0.03, d / 2 - 0.15,
+              z0 + h, z0 + h + 0.08)
+
+
+def b_table(mesh, fr, w, d, h, z0, item, mat):
+    top_t = 0.04
+    top_mat = item.get("top_material", "wood_light")
+    box_local(mesh, top_mat, fr, -w / 2, -d / 2, w / 2, d / 2, z0 + h - top_t, z0 + h)
+    lt, ins = 0.05, 0.06
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            xc = sx * (w / 2 - ins - lt / 2)
+            yc = sy * (d / 2 - ins - lt / 2)
+            box_local(mesh, "metal", fr, xc - lt / 2, yc - lt / 2,
+                      xc + lt / 2, yc + lt / 2, z0, z0 + h - top_t)
+
+
+def b_desk(mesh, fr, w, d, h, z0, item, mat):
+    it = dict(item); it["top_material"] = "white"
+    b_table(mesh, fr, w, d, h, z0, it, mat)
+
+
+def b_office_desk(mesh, fr, w, d, h, z0, item, mat):
+    b_desk(mesh, fr, w, d, h, z0, item, mat)
+    top = z0 + h
+    by = d / 2 - 0.12
+    stand_h, mon_w, mon_h = 0.12, 0.5, 0.32
+    box_local(mesh, "dark", fr, -0.10, by - 0.06, 0.10, by - 0.02, top, top + 0.015)
+    box_local(mesh, "dark", fr, -0.025, by - 0.02, 0.025, by + 0.02, top, top + stand_h)
+    box_local(mesh, "screen", fr, -mon_w / 2, by, mon_w / 2, by + 0.03,
+              top + stand_h, top + stand_h + mon_h)
+    box_local(mesh, "dark", fr, -0.22, -0.04, 0.22, 0.18, top, top + 0.02)
+
+
+def b_chair(mesh, fr, w, d, h, z0, item, mat):
+    seat_h = 0.45
+    smat = item.get("material") or "fabric"
+    box_local(mesh, smat, fr, -w / 2, -d / 2, w / 2, d / 2, z0 + seat_h - 0.06, z0 + seat_h)
+    box_local(mesh, smat, fr, -w / 2, d / 2 - 0.06, w / 2, d / 2, z0 + seat_h, z0 + h)
+    lt = 0.035
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            xc = sx * (w / 2 - 0.045); yc = sy * (d / 2 - 0.045)
+            box_local(mesh, "metal", fr, xc - lt / 2, yc - lt / 2,
+                      xc + lt / 2, yc + lt / 2, z0, z0 + seat_h - 0.06)
+
+
+def b_office_chair(mesh, fr, w, d, h, z0, item, mat):
+    seat_h = 0.48
+    cyl_local(mesh, "dark", fr, 0, 0, 0.03, z0 + 0.05, z0 + seat_h - 0.06, segs=10)
+    for ang in range(0, 360, 72):
+        a = math.radians(ang)
+        cyl_local(mesh, "dark", fr, 0.26 * math.cos(a), 0.26 * math.sin(a),
+                  0.025, z0, z0 + 0.05, segs=8)
+    box_local(mesh, "fabric", fr, -w / 2, -d / 2, w / 2, d / 2,
+              z0 + seat_h - 0.07, z0 + seat_h)
+    box_local(mesh, "fabric", fr, -w / 2 + 0.05, d / 2 - 0.06, w / 2 - 0.05, d / 2,
+              z0 + seat_h, z0 + h)
+
+
+def b_stool(mesh, fr, w, d, h, z0, item, mat):
+    cyl_local(mesh, "wood", fr, 0, 0, min(w, d) / 2, z0 + h - 0.05, z0 + h, segs=14)
+    for ang in (45, 135, 225, 315):
+        a = math.radians(ang)
+        cyl_local(mesh, "metal", fr, (w / 2 - 0.05) * math.cos(a),
+                  (d / 2 - 0.05) * math.sin(a), 0.02, z0, z0 + h - 0.05, segs=6)
+
+
+def b_sofa(mesh, fr, w, d, h, z0, item, mat):
+    smat = item.get("material") or "fabric"
+    arm, back, seat_h = 0.18, 0.18, 0.42
+    box_local(mesh, smat, fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + seat_h * 0.6)
+    box_local(mesh, smat, fr, -w / 2, d / 2 - back, w / 2, d / 2, z0, z0 + h)
+    box_local(mesh, smat, fr, -w / 2, -d / 2, -w / 2 + arm, d / 2, z0, z0 + h * 0.7)
+    box_local(mesh, smat, fr, w / 2 - arm, -d / 2, w / 2, d / 2, z0, z0 + h * 0.7)
+    n = max(1, int(round((w - 2 * arm) / 0.7)))
+    cw = (w - 2 * arm) / n
+    for i in range(n):
+        x0 = -w / 2 + arm + i * cw + 0.03
+        x1 = -w / 2 + arm + (i + 1) * cw - 0.03
+        box_local(mesh, smat, fr, x0, -d / 2 + 0.05, x1, d / 2 - back - 0.03,
+                  z0 + seat_h * 0.6, z0 + seat_h)
+        box_local(mesh, smat, fr, x0, d / 2 - back - 0.05, x1, d / 2 - back + 0.02,
+                  z0 + seat_h, z0 + h - 0.05)
+
+
+def b_armchair(mesh, fr, w, d, h, z0, item, mat):
+    b_sofa(mesh, fr, w, d, h, z0, item, mat)
+
+
+def b_table_chairs(mesh, fr, w, d, h, z0, item, mat):
+    b_table(mesh, fr, w, d, h, z0, item, mat)
+    n = max(1, int(w // 0.75))
+    cw = w / n
+    for i in range(n):
+        cx = -w / 2 + (i + 0.5) * cw
+        b_chair(mesh, child_frame(fr, cx, -(d / 2 + 0.30), 180), 0.5, 0.5, 0.9, z0, {}, None)
+        b_chair(mesh, child_frame(fr, cx, (d / 2 + 0.30), 0), 0.5, 0.5, 0.9, z0, {}, None)
+
+
+def b_round_table(mesh, fr, w, d, h, z0, item, mat):
+    r = min(w, d) / 2
+    top_t = 0.04
+    cyl_local(mesh, "wood_light", fr, 0, 0, r, z0 + h - top_t, z0 + h, segs=24)
+    cyl_local(mesh, "metal", fr, 0, 0, 0.06, z0, z0 + h - top_t, segs=12)
+    cyl_local(mesh, "metal", fr, 0, 0, r * 0.5, z0, z0 + 0.03, segs=18)
+    n = min(8, max(3, int(round(2 * math.pi * r / 0.65))))
+    for i in range(n):
+        ang = 2 * math.pi * i / n
+        cx = (r + 0.32) * math.cos(ang); cy = (r + 0.32) * math.sin(ang)
+        drot = math.degrees(ang) - 90.0
+        b_chair(mesh, child_frame(fr, cx, cy, drot), 0.5, 0.5, 0.9, z0, {}, None)
+
+
+def b_desk_bench(mesh, fr, w, d, h, z0, item, mat):
+    seats = int(item.get("seats", max(2, int(w // 1.5))))
+    seat_w = w / max(1, seats)
+    for sign in (-1, 1):
+        desk_rot = 0 if sign < 0 else 180
+        chair_rot = 180 if sign < 0 else 0
+        for i in range(seats):
+            cx = -w / 2 + (i + 0.5) * seat_w
+            cy = sign * (d * 0.25)
+            b_office_desk(mesh, child_frame(fr, cx, cy, desk_rot),
+                          seat_w * 0.92, d * 0.42, h, z0, {}, None)
+            b_office_chair(mesh, child_frame(fr, cx, sign * (d * 0.5 + 0.28), chair_rot),
+                           0.55, 0.55, 1.05, z0, {}, None)
+
+
+def b_kitchen(mesh, fr, w, d, h, z0, item, mat):
+    box_local(mesh, "dark", fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + 0.1)
+    box_local(mesh, "wood_light", fr, -w / 2, -d / 2, w / 2, d / 2, z0 + 0.1, z0 + h - 0.04)
+    box_local(mesh, "stone", fr, -w / 2 - 0.02, -d / 2 - 0.02, w / 2 + 0.02, d / 2 + 0.02,
+              z0 + h - 0.04, z0 + h)
+    if not item.get("island"):
+        box_local(mesh, "wood_light", fr, -w / 2, d / 2 - 0.35, w / 2, d / 2,
+                  z0 + 1.45, z0 + 2.15)
+    n = max(1, int(round(w / 0.6)))
+    for i in range(1, n):
+        x = -w / 2 + i * w / n
+        box_local(mesh, "dark", fr, x - 0.008, -d / 2, x + 0.008, -d / 2 + 0.02,
+                  z0 + 0.1, z0 + h - 0.04)
+
+
+def b_cabinet(mesh, fr, w, d, h, z0, item, mat):
+    body = item.get("material") or "wood"
+    box_local(mesh, body, fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + h)
+    if item.get("type") in ("shelving", "bookshelf"):
+        ns = max(2, int(h // 0.35))
+        for i in range(1, ns):
+            zz = z0 + i * h / ns
+            box_local(mesh, "dark", fr, -w / 2 + 0.02, -d / 2, w / 2 - 0.02, -d / 2 + 0.05,
+                      zz - 0.01, zz + 0.01)
+    else:
+        box_local(mesh, "dark", fr, -0.008, -d / 2, 0.008, -d / 2 + 0.02,
+                  z0 + 0.05, z0 + h - 0.05)
+
+
+def b_tv(mesh, fr, w, d, h, z0, item, mat):
+    base = z0 if z0 > EPS else 1.05
+    box_local(mesh, "screen", fr, -w / 2, -d / 2, w / 2, d / 2, base, base + h)
+
+
+def b_plant(mesh, fr, w, d, h, z0, item, mat):
+    pot_h = min(0.3, h * 0.3)
+    pr = min(w, d) / 2 * 0.6
+    cyl_local(mesh, "pot", fr, 0, 0, pr, z0, z0 + pot_h, segs=14)
+    cyl_local(mesh, "wood", fr, 0, 0, 0.03, z0 + pot_h, z0 + h * 0.5, segs=8)
+    fr_r = min(w, d) / 2
+    box_local(mesh, "plant", fr, -fr_r, -fr_r, fr_r, fr_r, z0 + h * 0.45, z0 + h * 0.85)
+    box_local(mesh, "plant_dark", fr, -fr_r * 0.7, -fr_r * 0.7, fr_r * 0.7, fr_r * 0.7,
+              z0 + h * 0.78, z0 + h)
+
+
+def b_column(mesh, fr, w, d, h, z0, item, mat):
+    if item.get("round"):
+        cyl_local(mesh, "concrete", fr, 0, 0, min(w, d) / 2, z0, z0 + h, segs=20)
+    else:
+        box_local(mesh, "concrete", fr, -w / 2, -d / 2, w / 2, d / 2, z0, z0 + h)
+
+
+def b_stairs(mesh, fr, w, d, h, z0, item, mat):
+    n = int(item.get("steps", max(2, round(h / 0.17))))
+    build_stairs(mesh, "stairs", (fr.cx, fr.cy), w, d, fr.rot, z0, h, n)
+
+
+BUILDERS = {
+    "box": b_box, "bed": b_bed, "table": b_table, "desk": b_desk,
+    "office_desk": b_office_desk, "desk_bench": b_desk_bench,
+    "chair": b_chair, "office_chair": b_office_chair, "stool": b_stool,
+    "sofa": b_sofa, "armchair": b_armchair, "table_chairs": b_table_chairs,
+    "round_table": b_round_table, "kitchen": b_kitchen, "cabinet": b_cabinet,
+    "tv": b_tv, "plant": b_plant, "column": b_column, "stairs": b_stairs,
+}
 
 
 def build_furniture(mesh, items):
@@ -241,25 +522,20 @@ def build_furniture(mesh, items):
     for item in items:
         t = str(item.get("type", "generic"))
         defaults = FURNITURE_TYPES.get(t, FURNITURE_TYPES["generic"])
-        material = defaults["material"]
-        # size: may be partial (override w/d only, keep default h)
         size = item.get("size")
         if size and len(size) >= 2:
-            w = float(size[0]); d = float(size[1])
+            w, d = float(size[0]), float(size[1])
         else:
             w, d = float(defaults["size"][0]), float(defaults["size"][1])
-        height = float(item.get("height", defaults["size"][2]))
+        h = float(item.get("height", defaults["size"][2]))
         at = item.get("at", [0.0, 0.0])
         cx, cy = float(at[0]), float(at[1])
         rot = float(item.get("rotation", 0.0))
         z0 = float(item.get("z", 0.0))
-
-        if t == "stairs":
-            n_steps = int(item.get("steps", max(2, round(height / 0.17))))
-            build_stairs(mesh, material, (cx, cy), w, d, rot, z0, height, n_steps)
-        else:
-            oriented_furniture_box(mesh, material, (cx, cy),
-                                   (w, d), rot, z0, z0 + height)
+        builder = item.get("builder") or defaults.get("builder", "box")
+        mat = item.get("material") or defaults.get("material", "wood")
+        fn = BUILDERS.get(builder, b_box)
+        fn(mesh, Frame(cx, cy, rot), w, d, h, z0, item, mat)
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +565,14 @@ def build_model(spec):
 
         def at(d):
             return (start[0] + ux * d, start[1] + uy * d)
+
+        # Glass partition: a transparent pane between thin top/bottom frame rails.
+        if w.get("type") == "glass" or w.get("glass"):
+            gt = min(thickness, 0.05)
+            oriented_box(mesh, "frame", start, end, thickness, 0.0, 0.06)
+            oriented_box(mesh, "glass", start, end, gt, 0.06, height - 0.06)
+            oriented_box(mesh, "frame", start, end, thickness, height - 0.06, height)
+            continue
 
         ops = []
         for op in openings_by_wall.get(i, []):
@@ -475,13 +759,15 @@ def write_glb(mesh):
         m = {
             "pbrMetallicRoughness": {
                 "baseColorFactor": spec["color"],
-                "metallicFactor": 0.0,
-                "roughnessFactor": 0.85,
+                "metallicFactor": float(spec.get("metalness", 0.0)),
+                "roughnessFactor": float(spec.get("roughness", 0.85)),
             },
             "doubleSided": True,
             "name": name,
         }
-        if spec["alpha"] == "BLEND":
+        if spec.get("emissive"):
+            m["emissiveFactor"] = spec["emissive"]
+        if spec.get("alpha") == "BLEND":
             m["alphaMode"] = "BLEND"
         materials_json.append(m)
         mat_index[name] = len(materials_json) - 1
@@ -535,19 +821,32 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>__TITLE__ — plan-to-3d</title>
 <style>
-  html,body{margin:0;height:100%;background:#1b1f24;overflow:hidden;
-    font-family:system-ui,Segoe UI,Roboto,sans-serif;color:#e8eaed}
+  html,body{margin:0;height:100%;background:#e9edf2;overflow:hidden;
+    font-family:system-ui,Segoe UI,Roboto,sans-serif;color:#2a2f36}
   #app{position:fixed;inset:0}
-  .label{padding:2px 7px;background:rgba(20,24,28,.78);border:1px solid #3a4350;
-    border-radius:5px;font-size:12px;color:#dfe5ee;white-space:nowrap;
-    pointer-events:none;transform:translateY(-50%)}
+  .label{padding:2px 8px;background:rgba(255,255,255,.86);border:1px solid #c4ccd6;
+    border-radius:6px;font-size:12px;color:#2a2f36;white-space:nowrap;
+    pointer-events:none;transform:translateY(-50%);
+    box-shadow:0 1px 3px rgba(0,0,0,.12)}
   #hud{position:fixed;left:12px;bottom:12px;font-size:12px;line-height:1.5;
-    color:#aeb6c2;background:rgba(20,24,28,.6);padding:8px 11px;border-radius:7px}
-  #hud b{color:#fff}
+    color:#3a4250;background:rgba(255,255,255,.78);padding:8px 11px;
+    border-radius:7px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+  #hud b{color:#11151b}
+  #toolbar{position:fixed;right:12px;top:12px;display:flex;gap:6px}
+  #toolbar button{font:inherit;font-size:12px;padding:6px 10px;cursor:pointer;
+    border:1px solid #c4ccd6;border-radius:7px;background:rgba(255,255,255,.85);
+    color:#2a2f36;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+  #toolbar button:hover{background:#fff}
+  #toolbar button.active{background:#3a72d0;color:#fff;border-color:#2f5fb0}
 </style>
 </head>
 <body>
 <div id="app"></div>
+<div id="toolbar">
+  <button id="btn-roof">Hide roof</button>
+  <button id="btn-top">Top view</button>
+  <button id="btn-iso">Iso view</button>
+</div>
 <div id="hud"><b>__TITLE__</b><br>drag = rotate · scroll = zoom · right-drag = pan</div>
 <script type="importmap">
 { "imports": {
@@ -559,20 +858,32 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 const GLB_B64 = "__GLB_B64__";
 const LABELS = __LABELS__;
+const SKY = 0xe9edf2;
 
 const app = document.getElementById('app');
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1b1f24);
+scene.background = new THREE.Color(SKY);
 
-const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.05, 5000);
+const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.05, 5000);
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(devicePixelRatio);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 app.appendChild(renderer.domElement);
+
+// Image-based lighting from a procedurally-generated room (no network needed),
+// so PBR materials pick up soft, realistic ambient reflections.
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const labelRenderer = new CSS2DRenderer();
 labelRenderer.setSize(innerWidth, innerHeight);
@@ -583,15 +894,17 @@ app.appendChild(labelRenderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.495;  // stay above the floor
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444a55, 1.05));
-const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-sun.position.set(1, 2, 1.3);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa3b0, 0.55));
+const sun = new THREE.DirectionalLight(0xfff4e6, 2.4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0004;
 scene.add(sun);
-const sun2 = new THREE.DirectionalLight(0xffffff, 0.5);
-sun2.position.set(-1.2, 1, -0.8);
-scene.add(sun2);
-scene.add(new THREE.GridHelper(200, 200, 0x2a313b, 0x232a33));
+const fill = new THREE.DirectionalLight(0xdfe7ff, 0.5);
+fill.position.set(-1.2, 1.0, -0.8);
+scene.add(fill);
 
 function b64ToArrayBuffer(b64){
   const bin = atob(b64); const len = bin.length;
@@ -600,17 +913,55 @@ function b64ToArrayBuffer(b64){
   return bytes.buffer;
 }
 
+let MODEL=null, ROOF=null, CENTER=new THREE.Vector3(), RADIUS=5;
+
+function isoView(){
+  camera.position.set(CENTER.x + RADIUS*1.25, CENTER.y + RADIUS*0.95, CENTER.z + RADIUS*1.25);
+  controls.target.copy(CENTER); controls.update();
+}
+function topView(){
+  camera.position.set(CENTER.x, CENTER.y + RADIUS*1.7, CENTER.z + 0.001);
+  controls.target.copy(CENTER); controls.update();
+}
+
 const loader = new GLTFLoader();
 loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
-  const model = gltf.scene;
+  const model = gltf.scene; MODEL = model;
   scene.add(model);
+  model.traverse(o => {
+    if(o.isMesh){
+      o.castShadow = true; o.receiveShadow = true;
+      if(o.material && o.material.name === 'roof') ROOF = o;
+      // glass should not cast heavy shadows
+      if(o.material && (o.material.name === 'glass' || o.material.name === 'window'))
+        o.castShadow = false;
+    }
+  });
+
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  const radius = Math.max(size.x, size.y, size.z) || 5;
-  controls.target.copy(center);
-  camera.position.set(center.x + radius*1.3, center.y + radius*1.0, center.z + radius*1.3);
-  camera.near = radius/100; camera.far = radius*100; camera.updateProjectionMatrix();
+  const radius = Math.max(size.x, size.z) || 5;
+  CENTER.copy(center); RADIUS = radius;
+  camera.near = radius/200; camera.far = radius*200; camera.updateProjectionMatrix();
+
+  // sun + shadow frustum sized to the model
+  sun.position.set(center.x + radius*0.8, box.max.y + radius*1.6, center.z + radius*0.5);
+  sun.target.position.copy(center); scene.add(sun.target);
+  const sc = sun.shadow.camera;
+  sc.left=-radius; sc.right=radius; sc.top=radius; sc.bottom=-radius;
+  sc.near = 0.1; sc.far = radius*6; sc.updateProjectionMatrix();
+
+  // ground plane that only shows the contact shadow
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(radius*30, radius*30),
+    new THREE.ShadowMaterial({opacity:0.22}));
+  ground.rotation.x = -Math.PI/2;
+  ground.position.y = box.min.y - 0.005;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  scene.fog = new THREE.Fog(SKY, radius*5, radius*18);
 
   for(const l of LABELS){
     const div = document.createElement('div');
@@ -620,21 +971,26 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
     scene.add(obj);
   }
 
-  // Debug / scripting handle: lets you toggle materials by name, move the
-  // camera, etc. from the browser console. Harmless for end users.
+  isoView();
+
+  // Debug / scripting handle.
   window.__viewer = {THREE, scene, camera, controls, model, center, radius,
     setMaterialVisible(name, visible){
-      model.traverse(o => {
-        if(o.isMesh && o.material && o.material.name === name){
-          o.visible = visible;
-        }
-      });
+      model.traverse(o => { if(o.isMesh && o.material && o.material.name === name) o.visible = visible; });
     },
-    topDown(){
-      camera.position.set(center.x, center.y + radius*1.6, center.z + 0.01);
-      controls.target.copy(center); controls.update();
-    }};
+    topDown: topView, iso: isoView};
 }, (err) => { console.error('GLB parse error', err); });
+
+// toolbar
+const btnRoof = document.getElementById('btn-roof');
+btnRoof.addEventListener('click', () => {
+  if(!ROOF) return;
+  ROOF.visible = !ROOF.visible;
+  btnRoof.textContent = ROOF.visible ? 'Hide roof' : 'Show roof';
+  btnRoof.classList.toggle('active', !ROOF.visible);
+});
+document.getElementById('btn-top').addEventListener('click', topView);
+document.getElementById('btn-iso').addEventListener('click', isoView);
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();

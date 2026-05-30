@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "name": "Office Floor",
+    "units": "m",
+    "wall_height": 3.0,
+    "wall_thickness": 0.2
+  },
+  "walls": [
+    {"start": [0, 0],   "end": [18, 0],  "type": "exterior"},
+    {"start": [18, 0],  "end": [18, 12], "type": "exterior"},
+    {"start": [18, 12], "end": [0, 12],  "type": "exterior"},
+    {"start": [0, 12],  "end": [0, 0],   "type": "exterior"},
+
+    {"start": [13, 0],  "end": [13, 4],  "type": "glass"},
+    {"start": [13, 4],  "end": [18, 4],  "type": "glass"},
+    {"start": [13, 8],  "end": [18, 8],  "type": "glass"},
+    {"start": [13, 8],  "end": [13, 12], "type": "glass"}
+  ],
+  "openings": [
+    {"wall": 0, "kind": "door",   "position": 0.10, "width": 1.6, "height": 2.4},
+    {"wall": 0, "kind": "window", "position": 0.40, "width": 2.2, "height": 1.6, "sill": 0.9},
+    {"wall": 0, "kind": "window", "position": 0.62, "width": 2.2, "height": 1.6, "sill": 0.9},
+    {"wall": 1, "kind": "window", "position": 0.25, "width": 2.0, "height": 1.6, "sill": 0.9},
+    {"wall": 1, "kind": "window", "position": 0.75, "width": 2.0, "height": 1.6, "sill": 0.9},
+    {"wall": 2, "kind": "window", "position": 0.30, "width": 2.4, "height": 1.6, "sill": 0.9},
+    {"wall": 3, "kind": "window", "position": 0.35, "width": 2.0, "height": 1.6, "sill": 0.9},
+    {"wall": 3, "kind": "window", "position": 0.70, "width": 2.0, "height": 1.6, "sill": 0.9}
+  ],
+  "slab": {"enabled": true, "thickness": 0.2, "margin": 0.0},
+  "roof": {"type": "flat", "thickness": 0.25, "overhang": 0.0},
+  "rooms": [
+    {"name": "Open office", "at": [6, 4.5]},
+    {"name": "Lounge", "at": [2.6, 10.2]},
+    {"name": "Kitchen", "at": [9.5, 11]},
+    {"name": "Meeting", "at": [15.5, 2]},
+    {"name": "Boardroom", "at": [15.5, 10]}
+  ],
+  "furniture": [
+    {"type": "desk_bench", "at": [4, 2.8], "size": [3.0, 1.6], "seats": 3, "rotation": 0},
+    {"type": "desk_bench", "at": [8.2, 2.8], "size": [3.0, 1.6], "seats": 3, "rotation": 0},
+    {"type": "desk_bench", "at": [4, 6.2], "size": [3.0, 1.6], "seats": 3, "rotation": 0},
+    {"type": "desk_bench", "at": [8.2, 6.2], "size": [3.0, 1.6], "seats": 3, "rotation": 0},
+
+    {"type": "column", "at": [6.4, 4.5], "size": [0.45, 0.45], "round": true},
+    {"type": "column", "at": [11.5, 4.5], "size": [0.45, 0.45], "round": true},
+    {"type": "column", "at": [6.4, 8.5], "size": [0.45, 0.45], "round": true},
+    {"type": "column", "at": [11.5, 8.5], "size": [0.45, 0.45], "round": true},
+
+    {"type": "sofa", "at": [2.6, 11.1], "size": [2.4, 0.95], "rotation": 0},
+    {"type": "armchair", "at": [4.4, 10.2], "size": [0.9, 0.9], "rotation": 90},
+    {"type": "coffee_table", "at": [2.6, 10.0], "size": [1.1, 0.6], "rotation": 0},
+    {"type": "rug", "at": [3.0, 10.4], "size": [3.0, 2.2], "rotation": 0},
+    {"type": "plant_large", "at": [0.8, 11.1]},
+
+    {"type": "kitchen_counter", "at": [9.5, 11.6], "size": [3.2, 0.6], "rotation": 0},
+    {"type": "fridge", "at": [11.4, 11.5], "rotation": 0},
+    {"type": "stool", "at": [8.4, 10.7], "rotation": 0},
+    {"type": "stool", "at": [9.1, 10.7], "rotation": 0},
+    {"type": "stool", "at": [9.8, 10.7], "rotation": 0},
+
+    {"type": "conference_table", "at": [15.5, 2.0], "size": [3.2, 1.1], "rotation": 0},
+    {"type": "tv", "at": [17.85, 2.0], "size": [1.8, 0.06, 0.95], "rotation": 90, "z": 1.05},
+
+    {"type": "round_table", "at": [15.5, 10.0], "size": [1.9, 1.9], "rotation": 0},
+    {"type": "credenza", "at": [15.5, 11.7], "size": [2.0, 0.45], "rotation": 0},
+
+    {"type": "plant", "at": [12.4, 6.2]},
+    {"type": "plant", "at": [12.4, 1.0]},
+    {"type": "shelving", "at": [0.4, 5.5], "size": [0.4, 2.4], "rotation": 0}
+  ]
+}

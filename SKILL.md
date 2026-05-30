@@ -10,7 +10,7 @@ description: >-
 
 # plan-to-3d
 
-Turn any 2D plan into a 3D massing model. The pipeline is:
+Turn any 2D plan into a furnished, SketchUp-style 3D model. The pipeline is:
 
 ```
 plan file  ->  ingest.py  ->  PNG(s)  ->  [you read them]  ->  building.json
@@ -19,6 +19,16 @@ plan file  ->  ingest.py  ->  PNG(s)  ->  [you read them]  ->  building.json
 
 `generate.py` uses the Python standard library only. `ingest.py` and the PNG
 preview use a few common pip packages (see requirements.txt).
+
+## Resolution target
+
+The goal is a clean, **furnished dollhouse render** — walls, glass partitions,
+columns, and recognisable multi-part furniture (desks with monitors, office
+chairs, sofas, conference tables with chairs, kitchens, plants), lit with soft
+shadows and physically-based materials. An empty shell of bare walls is NOT
+acceptable: the value is in reading the *layout in use*. Whenever a plan shows
+furniture, model it. When in doubt, add the item with default dimensions rather
+than leaving the room empty.
 
 ## When to use
 
@@ -91,6 +101,29 @@ Open each PNG with the Read tool and extract, carefully:
       the up direction. Use `type: "stairs"`, `size: [tread_width, total_run]`,
       `height: total_rise`, `rotation` along the climb direction. The
       generator auto-picks ~17 cm per step unless you set `steps`.
+  Office / workplace plans add these:
+    - **Workstation bench** — a block of desks pushed together, usually two
+      rows back-to-back, each desk with a chair. Model the whole block with one
+      `type: "desk_bench"`, `size: [block_w, block_d]`, `"seats": N` (desks per
+      row). The builder lays out N desks per side, each with a monitor and an
+      office chair. One bench per cluster — don't place 12 separate desks.
+    - **Single desk** — `office_desk` (renders desktop + monitor + keyboard) for
+      a workplace; `desk` for a plain writing desk. Pair with `office_chair`.
+    - **Conference / meeting table** — long table ringed by many chairs. Use
+      `conference_table` or `meeting_table`; the builder auto-adds a chair row
+      on each long side, scaled to the length. `round_table` does the same with
+      chairs around the rim.
+    - **Glass partition** — thin double line, often dashed, enclosing a meeting
+      room. Model it as a WALL with `"type": "glass"` (not as furniture); it
+      renders as a translucent pane between thin frame rails.
+    - **Structural column** — a solid filled square or circle in the open floor,
+      on a regular grid. Use `type: "column"` (`"round": true` for circular),
+      `height` = full ceiling height.
+    - **Plant** — a circle with a leafy/star outline. Use `plant` or
+      `plant_large`.
+    - **Lounge** — `sofa` / `sofa_l` + `armchair` + `coffee_table` + a `rug`.
+    - **Lockers / storage / credenza / shelving** — long thin rectangles
+      against walls: `cabinet`, `wardrobe`, `lockers`, `credenza`, `shelving`.
   If a symbol is ambiguous, prefer a sensible default over skipping it —
   an empty 3D room is the worst outcome.
 
@@ -104,45 +137,60 @@ Follow `schema.json`. Minimal shape:
 ```json
 {
   "meta": {"name": "...", "units": "m", "wall_height": 2.6, "wall_thickness": 0.2},
-  "walls": [{"start": [x, y], "end": [x, y], "thickness": 0.2, "type": "exterior"}],
+  "walls": [
+    {"start": [x, y], "end": [x, y], "thickness": 0.2, "type": "exterior"},
+    {"start": [x, y], "end": [x, y], "type": "glass"}
+  ],
   "openings": [{"wall": 0, "kind": "door|window", "distance": 1.5,
                 "width": 0.9, "sill": 0.0, "height": 2.1}],
   "slab": {"enabled": true, "thickness": 0.15},
   "roof": {"type": "flat|gable|none", "height": 1.5, "overhang": 0.3, "ridge_axis": "x"},
-  "rooms": [{"name": "Living room", "at": [x, y]}],
+  "rooms": [{"name": "Open office", "at": [x, y]}],
   "furniture": [
-    {"type": "double_bed",   "at": [6.5, 2.0], "rotation": 0},
-    {"type": "sofa",         "at": [2.5, 1.2], "rotation": 0},
-    {"type": "dining_table", "at": [2.5, 4.2], "rotation": 0},
-    {"type": "chair",        "at": [1.7, 4.2], "rotation": 0},
-    {"type": "kitchen_counter","at": [4.2, 5.6], "size": [3.4, 0.6], "rotation": 0},
-    {"type": "fridge",       "at": [4.6, 5.6], "rotation": 0},
-    {"type": "stove",        "at": [3.4, 5.6], "rotation": 0},
-    {"type": "kitchen_sink", "at": [5.5, 5.6], "rotation": 0},
-    {"type": "toilet",       "at": [7.5, 5.5], "rotation": 0},
-    {"type": "bathtub",      "at": [7.0, 4.0], "rotation": 90},
-    {"type": "stairs",       "at": [6.0, 3.0], "size": [1.0, 3.2],
-     "height": 2.7, "rotation": 90}
+    {"type": "desk_bench",       "at": [4, 3], "size": [3.0, 1.6], "seats": 3},
+    {"type": "office_desk",      "at": [8, 3], "rotation": 90},
+    {"type": "conference_table", "at": [15, 2], "size": [3.2, 1.1]},
+    {"type": "round_table",      "at": [15, 10], "size": [1.8, 1.8]},
+    {"type": "sofa",             "at": [2.6, 11], "size": [2.4, 0.95]},
+    {"type": "coffee_table",     "at": [2.6, 10]},
+    {"type": "rug",              "at": [2.8, 10.4], "size": [3.0, 2.2]},
+    {"type": "kitchen_counter",  "at": [9.5, 11.6], "size": [3.2, 0.6]},
+    {"type": "fridge",           "at": [11.4, 11.5]},
+    {"type": "column",           "at": [6.4, 4.5], "round": true},
+    {"type": "tv",               "at": [17.85, 2], "rotation": 90, "z": 1.05},
+    {"type": "plant_large",      "at": [12.4, 6.2]},
+    {"type": "stairs",           "at": [6, 3], "size": [1.0, 3.2], "height": 2.7, "rotation": 90}
   ]
 }
 ```
 
+A full worked office example lives in `examples/office_floor.json`; the
+residential example is `examples/demo_house.json`.
+
 Rules of thumb:
 - `openings[].wall` is the index of the wall in the `walls` array.
 - Use `"distance"` (metres from the wall start) OR `"position"` (0..1 fraction).
-- Exterior walls ~0.2-0.30 m thick; interior ~0.08-0.12 m.
-- Flat roof for an intermediate apartment floor; gable for a standalone house;
-  `none` to leave the top open (dollhouse).
+- Exterior walls ~0.2-0.30 m thick; interior ~0.08-0.12 m. A wall with
+  `"type": "glass"` becomes a translucent partition (meeting-room walls).
+- Flat roof for an office floor or an intermediate apartment floor; gable for a
+  standalone house; `none` to leave the top open. Either way the viewer has a
+  **Hide roof** button, so a roof never blocks the interior.
 - One `rooms[]` entry per labelled space; `at` is any point inside the room.
-- `furniture[]` is optional but strongly encouraged. Each item is a known
-  type (see schema.json for the full list) plus an `at` centre point. The
-  generator has built-in default size/height/colour for every type, so
-  `{"type": "sofa", "at": [x, y]}` already produces a credible sofa. Override
-  `size: [w, d]` and `height` when the plan shows a clearly non-standard item
-  (e.g. an L-shaped sofa modelled as two boxes, or a kingsize bed). Set
-  `rotation` (degrees) so the long side runs the way the symbol does on the
-  plan. Pull items at least 5–10 cm away from walls — overlapping walls
-  causes z-fighting in the viewer.
+- `furniture[]` is the heart of the result — **populate it generously.** Each
+  item is a known type (full list in `schema.json`) plus an `at` centre point.
+  Every type has a built-in component builder with default size/height, so
+  `{"type": "sofa", "at": [x, y]}` already yields a multi-part sofa, an
+  `office_desk` comes with monitor + keyboard, a `conference_table` comes with
+  its chairs. Override `size: [w, d]` and `height` only for clearly
+  non-standard items. Set `rotation` (degrees) so the item's front (-Y / open
+  side) faces the way the symbol does. Keep items ~5–10 cm off walls to avoid
+  z-fighting.
+- `desk_bench` / `workstation`: `"seats": N` desks per row (two rows
+  back-to-back). One bench per cluster of desks on the plan.
+- `conference_table`, `meeting_table`, `round_table`, `dining_table` auto-add
+  their chairs — do NOT also place individual chairs around them.
+- `column` (`"round": true` for circular) for structural pillars; set `height`
+  to the ceiling height.
 - Stairs use `type: "stairs"`, `size: [tread_width, total_run]`,
   `height: total_rise` (top floor level). Add `"steps": N` only if you want
   to force a specific count; otherwise the generator picks ~17 cm risers.
@@ -157,11 +205,16 @@ Outputs `model.glb`, `viewer.html`, and (with `--preview`) `preview.png`.
 
 ### 5. Verify, then deliver
 
-- Read `preview.png`. Check the footprint, room count, and that doors/windows
-  landed on the right walls. The preview's roof is drawn semi-transparent and
-  matplotlib has no real depth buffer, so minor face-ordering specks are normal
-  — the GLB/HTML viewer renders perfectly.
-- If something is off, fix `building.json` and regenerate. Iterate.
+- ALWAYS open `viewer.html` and look before claiming done. It renders with soft
+  shadows, ambient (IBL) lighting and tone mapping, and has a toolbar:
+  **Hide roof** (inspect the interior), **Top view**, **Iso view**. Check the
+  footprint, that furniture sits in the right rooms, faces the right way, and
+  doesn't overlap walls. From the browser console you can also call
+  `window.__viewer.setMaterialVisible('roof', false)` / `.topDown()` / `.iso()`.
+- `preview.png` (with `--preview`, needs matplotlib) is a rough flat-shaded
+  check only; the HTML viewer is the real deliverable quality.
+- If something is off, fix `building.json` and regenerate. Iterate until the
+  interior reads clearly.
 - Hand over `viewer.html` (double-click to open, fully self-contained — the GLB
   is embedded as base64) and `model.glb` (import into Blender, FreeCAD,
   SketchUp Free, or any online glTF viewer). Send the files to the user.
