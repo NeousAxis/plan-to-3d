@@ -159,13 +159,16 @@ def upgrade_materials():
 def add_sun(angle_deg=40):
     bpy.ops.object.light_add(type='SUN')
     sun = bpy.context.object
-    sun.data.energy = 3.0
-    sun.data.angle = math.radians(2.5)        # soft shadow
+    sun.data.energy = 6.0                      # brighter, gallery-grade key
+    sun.data.angle = math.radians(2.5)
     sun.rotation_euler = (math.radians(angle_deg), 0, math.radians(35))
     return sun
 
 
-def add_environment(strength=0.4):
+def add_environment(strength=1.6):
+    """Bright diffuse sky so interior bounces are clear (matches the
+    well-lit reception in the user's reference photo, not a moody night
+    interior)."""
     world = bpy.context.scene.world
     if world is None:
         world = bpy.data.worlds.new("World")
@@ -177,11 +180,39 @@ def add_environment(strength=0.4):
     sky = nt.nodes.new('ShaderNodeTexSky')
     sky.sky_type = 'HOSEK_WILKIE'
     sky.sun_direction = mathutils.Vector((0.6, 0.4, 0.8)).normalized()
-    sky.turbidity = 3.0
+    sky.turbidity = 2.0                        # clearer sky -> more light
     out = nt.nodes.new('ShaderNodeOutputWorld')
     nt.links.new(sky.outputs[0], bg.inputs[0])
     bg.inputs[1].default_value = strength
     nt.links.new(bg.outputs[0], out.inputs[0])
+
+
+def add_fill_areas(meshes):
+    """Adds two large Area lights inside the building envelope as soft fill,
+    so the interior is gallery-bright instead of cave-dark. Energies tuned
+    against the brighter sun + sky above."""
+    if not meshes:
+        return
+    minp = mathutils.Vector(( 1e9,  1e9,  1e9))
+    maxp = mathutils.Vector((-1e9, -1e9, -1e9))
+    for o in meshes:
+        for v in o.bound_box:
+            wv = o.matrix_world @ mathutils.Vector(v)
+            minp = mathutils.Vector(map(min, minp, wv))
+            maxp = mathutils.Vector(map(max, maxp, wv))
+    cx, cy = (minp.x+maxp.x)/2, (minp.y+maxp.y)/2
+    cz = (minp.z+maxp.z)/2
+    sx, sy = (maxp.x-minp.x), (maxp.y-minp.y)
+    # Big "skylight" hovering just above the ceiling, pointing down
+    bpy.ops.object.light_add(type='AREA')
+    L = bpy.context.object
+    L.data.energy = 800
+    L.data.shape = 'RECTANGLE'
+    L.data.size = sx * 0.9
+    L.data.size_y = sy * 0.9
+    L.data.color = (1.0, 0.98, 0.95)
+    L.location = (cx, cy, maxp.z + 0.5)
+    L.rotation_euler = (0, 0, 0)
 
 
 def add_fixtures(spec, floor_y):
@@ -273,8 +304,9 @@ def main():
     meshes = load_glb(args.glb)
     print(f"[bake] imported {len(meshes)} meshes from {args.glb}")
 
-    add_environment(strength=0.35)
+    add_environment(strength=1.6)
     add_sun()
+    add_fill_areas(meshes)
     floor_y = min((o.matrix_world @ mathutils.Vector(o.bound_box[0])).z
                   for o in meshes) if meshes else 0.0
     add_fixtures(spec, floor_y)

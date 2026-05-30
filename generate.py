@@ -1303,6 +1303,40 @@ function texNoise(base, tile, amp){
     x.fillRect(Math.random()*s, Math.random()*s, 1, 1); }
   return finishTex(c, tile||3.0);
 }
+function texDrywall(base, tile){
+  // Matte interior paint: dense micro-grain + a few faint horizontal sweeps
+  // (roller marks) + very subtle large-scale tonal patches. Reads as a real
+  // painted wall instead of a flat colour.
+  const s = 512, c = mkCanvas(s), x = c.getContext('2d');
+  x.fillStyle = base; x.fillRect(0,0,s,s);
+  // large soft tonal blobs (slight light/dark hue variation)
+  for(let i=0; i<20; i++){
+    const cx_=Math.random()*s, cy_=Math.random()*s, r=80+Math.random()*200;
+    const grd = x.createRadialGradient(cx_, cy_, 0, cx_, cy_, r);
+    const dir = Math.random() > 0.5 ? '255,255,255' : '0,0,0';
+    grd.addColorStop(0, `rgba(${dir},0.05)`);
+    grd.addColorStop(1, `rgba(${dir},0)`);
+    x.fillStyle = grd; x.beginPath();
+    x.arc(cx_, cy_, r, 0, 6.283); x.fill();
+  }
+  // dense micro grain
+  const img = x.getImageData(0, 0, s, s);
+  for(let i=0; i<img.data.length; i+=4){
+    const n = (Math.random() - 0.5) * 12;
+    img.data[i]   = Math.max(0, Math.min(255, img.data[i]   + n));
+    img.data[i+1] = Math.max(0, Math.min(255, img.data[i+1] + n));
+    img.data[i+2] = Math.max(0, Math.min(255, img.data[i+2] + n));
+  }
+  x.putImageData(img, 0, 0);
+  // faint horizontal roller streaks
+  for(let i=0; i<8; i++){
+    const y = Math.random() * s;
+    x.strokeStyle = 'rgba(255,255,255,0.03)';
+    x.lineWidth = 1 + Math.random()*1.5;
+    x.beginPath(); x.moveTo(0, y); x.lineTo(s, y); x.stroke();
+  }
+  return finishTex(c, tile || 2.5);
+}
 function texFabric(base, tile){
   const s=256, c=mkCanvas(s), x=c.getContext('2d');
   x.fillStyle=base; x.fillRect(0,0,s,s);
@@ -1319,22 +1353,39 @@ function texMarble(){
   return finishTex(c, 2.0);
 }
 function texPerforated(){
-  // White metal panel with regular punched holes (transparent), echoing the
-  // perforated ceiling cassettes in the reference render.
-  const s=256, c=document.createElement('canvas');
-  c.width=c.height=s; const x=c.getContext('2d');
-  x.fillStyle='#cfd2d7'; x.fillRect(0,0,s,s);
-  // light noise so it doesn't read as plastic
-  for(let i=0;i<2000;i++){
-    x.fillStyle='rgba(255,255,255,'+(Math.random()*0.07).toFixed(2)+')';
+  // White metal panel with dense, sharply-cut perforations and rim shadows
+  // around each hole. Tuned to read clearly from a distance (matches the
+  // perforated cassettes in the reference photo, RHS half).
+  const s = 512, c = document.createElement('canvas');
+  c.width = c.height = s;
+  const x = c.getContext('2d');
+  // panel base: warm white with a brushed-metal subtle gradient
+  const g = x.createLinearGradient(0, 0, s, s);
+  g.addColorStop(0, '#e8eaee');
+  g.addColorStop(0.5, '#d5d8dc');
+  g.addColorStop(1, '#e8eaee');
+  x.fillStyle = g; x.fillRect(0, 0, s, s);
+  // micro brushed-metal streaks
+  for (let i = 0; i < 600; i++){
+    x.fillStyle = `rgba(255,255,255,${(Math.random()*0.08).toFixed(2)})`;
     x.fillRect(Math.random()*s, Math.random()*s, 1, 1);
   }
-  // punched holes: clear circles in a grid (the alpha channel makes them
-  // see-through, so the dark ceiling void shows through).
+  // staggered (hex) hole grid for a denser, more realistic pattern.
+  // hole spacing & radius tuned so a 1 m panel shows ~25×25 holes.
+  const step = 16, r = 4.6;
+  for (let row = 0, py = step/2; py < s + step; py += step, row++){
+    const ox = (row % 2) ? step/2 : 0;
+    for (let px = step/2 + ox; px < s + step; px += step){
+      // dark rim shadow around the punch (gives the hole real depth)
+      x.fillStyle = 'rgba(40,40,46,0.65)';
+      x.beginPath(); x.arc(px, py, r + 1.0, 0, 6.283); x.fill();
+    }
+  }
+  // then PUNCH the holes through the alpha channel
   x.globalCompositeOperation = 'destination-out';
-  const step = 24, r = 6;
-  for(let py=step/2; py<s; py+=step){
-    for(let px=step/2; px<s; px+=step){
+  for (let row = 0, py = step/2; py < s + step; py += step, row++){
+    const ox = (row % 2) ? step/2 : 0;
+    for (let px = step/2 + ox; px < s + step; px += step){
       x.beginPath(); x.arc(px, py, r, 0, 6.283); x.fill();
     }
   }
@@ -1343,8 +1394,8 @@ function texPerforated(){
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = maxAniso;
-  // 1 tile = 0.5 m so the perforation grid reads at a believable scale.
-  t.repeat.set(1/0.5, 1/0.5);
+  // 1 m of ceiling = one full pattern (i.e. ~32 holes/m at the new spacing).
+  t.repeat.set(1, 1);
   return t;
 }
 function texArt(hue){
@@ -1377,32 +1428,54 @@ function texArt(hue){
   return t;
 }
 function texCeilingDark(){
-  // Anthracite ceiling tiles with a faint geometric (triangular) pattern —
-  // matches the dark, design ceiling panels in the reference photo (the half
-  // that ISN'T the perforated metal).
-  const s = 256, c = mkCanvas(s), x = c.getContext('2d');
-  x.fillStyle = '#22252a'; x.fillRect(0,0,s,s);
-  // panel grid lines
-  x.strokeStyle = 'rgba(0,0,0,0.6)'; x.lineWidth = 2;
-  for(let i=0;i<=s;i+=s/4){
-    x.beginPath(); x.moveTo(i,0); x.lineTo(i,s); x.stroke();
-    x.beginPath(); x.moveTo(0,i); x.lineTo(s,i); x.stroke();
+  // Anthracite "origami" ceiling: triangular faceted panels that catch
+  // grazing light differently per face. Mirrors the dark, design ceiling
+  // panels on the left side of the reference photo.
+  const s = 512, c = mkCanvas(s), x = c.getContext('2d');
+  // base dark canvas
+  x.fillStyle = '#1a1c20'; x.fillRect(0,0,s,s);
+  // Triangle strip pattern: each row is a band of alternating up/down
+  // triangles forming a sawtooth horizontal seam. Each triangle gets a
+  // slightly different tone (simulates the per-face shading you'd get if
+  // these were real folded panels).
+  const N = 6;                       // triangles per row
+  const triW = s / N;
+  const triH = triW * 0.866;         // equilateral height
+  for(let row = 0, py = 0; py < s + triH; row++, py += triH){
+    for(let i = 0; i < N; i++){
+      const px = i * triW;
+      const flip = ((row + i) % 2) === 0;
+      const shade = 0.55 + 0.45 * Math.random();
+      // Up-pointing triangles
+      const tone1 = Math.floor(28 + shade * 28);
+      x.fillStyle = `rgb(${tone1},${tone1+2},${tone1+6})`;
+      x.beginPath();
+      if(flip){
+        x.moveTo(px, py + triH);
+        x.lineTo(px + triW, py + triH);
+        x.lineTo(px + triW/2, py);
+      } else {
+        x.moveTo(px, py);
+        x.lineTo(px + triW, py);
+        x.lineTo(px + triW/2, py + triH);
+      }
+      x.closePath(); x.fill();
+      // Thin edge highlight along the upper-left side (catches light)
+      x.strokeStyle = 'rgba(80,82,90,0.55)';
+      x.lineWidth = 1.2; x.stroke();
+    }
   }
-  // sparse darker triangles inside the cells
-  x.fillStyle = 'rgba(8,9,11,0.7)';
-  for(let i=0;i<30;i++){
-    const px = Math.random()*s, py = Math.random()*s, r = 10 + Math.random()*22;
-    x.beginPath();
-    x.moveTo(px, py - r);
-    x.lineTo(px + r*0.87, py + r*0.5);
-    x.lineTo(px - r*0.87, py + r*0.5);
-    x.closePath(); x.fill();
+  // Subtle vertical seams between panel rows
+  x.strokeStyle = 'rgba(0,0,0,0.55)';
+  x.lineWidth = 0.8;
+  for(let py = triH; py < s; py += triH){
+    x.beginPath(); x.moveTo(0, py); x.lineTo(s, py); x.stroke();
   }
-  return finishTex(c, 1.0);
+  return finishTex(c, 1.2);
 }
 // material name -> texture factory (only these get a map; rest stay solid PBR)
 const TEXFOR = {
-  wall:        ()=>texNoise('#ededeb', 3.0, 9),
+  wall:        ()=>texDrywall('#eeece9', 2.5),
   slab:        ()=>texTerrazzo(),
   wood:        ()=>texWood('#8f5f35', 1.3),
   wood_light:  ()=>texWood('#bf9d6e', 1.4),

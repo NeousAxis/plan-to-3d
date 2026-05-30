@@ -40,7 +40,7 @@ def main():
     ap.add_argument("--res", default="1920x1080")
     ap.add_argument("--cam", default=None,
                     help="camera 'ex,ey,ez,tx,ty,tz' (Blender world metres)")
-    ap.add_argument("--exposure", type=float, default=0.4)
+    ap.add_argument("--exposure", type=float, default=1.2)
     ap.add_argument("--keep-roof", action="store_true",
                     help="render with the roof on (default: stripped so the "
                          "interior is visible)")
