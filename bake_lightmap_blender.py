@@ -213,6 +213,9 @@ def setup_bake_target(obj, img):
 
 
 def bake_lightmap(obj, img):
+    """1st pass: bake pure DIFFUSE light (direct + indirect, no colour).
+    The result is a per-mesh "shadow + GI" image; multiplied by base colour
+    in the 2nd EMIT pass to produce the final pre-lit texture."""
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
@@ -225,13 +228,14 @@ def bake_lightmap(obj, img):
     return img
 
 
-def attach_lightmap_to_materials(obj, img):
-    """Wire `base_colour × lightmap` into the BSDF's Emission so the glTF
-    exporter packages it as emissiveTexture (UV2). The viewer then promotes
-    that emissiveTexture to the colour map of a MeshBasicMaterial → fully
-    pre-lit, no realtime shading required.
-
-    Handles both base-colour-as-texture and base-colour-as-flat-RGBA."""
+def bake_emit_flatten(obj, src_img, dst_img):
+    """2nd pass: bake type='EMIT' after wiring `base_colour × src_img` into
+    the BSDF emission. The result is a SINGLE image holding the fully pre-lit
+    (base × light) colour, with NO node-graph multiplications glTF would
+    have trouble exporting. The shader is restored to its original state
+    after the bake so realtime fixture lights can still act on the mesh."""
+    # Snapshot the original material state per slot
+    saved = []
     for slot in obj.material_slots:
         m = slot.material
         if m is None or not m.use_nodes:
@@ -240,33 +244,101 @@ def attach_lightmap_to_materials(obj, img):
         bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
         if bsdf is None:
             continue
-        # 1) Read the current base colour: either a texture or an RGBA value
         bc = bsdf.inputs['Base Color']
-        # 2) Add the lightmap texture node (Linear so it stays unmolested by
-        #    sRGB conversion when used as a multiplier).
-        lm = nt.nodes.new('ShaderNodeTexImage')
-        lm.image = img
-        lm.image.colorspace_settings.name = 'Linear Rec.709'
-        lm.label = 'LIGHTMAP'
+        em_color = bsdf.inputs['Emission Color']
+        em_str = bsdf.inputs['Emission Strength']
+        saved.append({
+            'm': m,
+            'em_color_links': [(l.from_socket, l.to_socket) for l in em_color.links],
+            'em_color_val': tuple(em_color.default_value),
+            'em_str_val': em_str.default_value,
+        })
+        # Build base_colour × lightmap into Emission Color
         uv = nt.nodes.new('ShaderNodeUVMap')
         uv.uv_map = 'Lightmap'
+        lm = nt.nodes.new('ShaderNodeTexImage')
+        lm.image = src_img
+        lm.image.colorspace_settings.name = 'Linear Rec.709'
         nt.links.new(uv.outputs['UV'], lm.inputs['Vector'])
-        # 3) Multiply baseColour × lightmap → Emission Color.
         mul = nt.nodes.new('ShaderNodeMix')
         mul.data_type = 'RGBA'
         mul.blend_type = 'MULTIPLY'
         mul.inputs['Factor'].default_value = 1.0
         if bc.is_linked:
-            # texture-backed base colour
-            nt.links.new(bc.links[0].from_socket, mul.inputs[6])  # A
+            nt.links.new(bc.links[0].from_socket, mul.inputs[6])
         else:
-            # FLAT base colour: drive the A input with an RGB node so the
-            # multiply actually sees the green / wood / metal tint.
             rgb = nt.nodes.new('ShaderNodeRGB')
             rgb.outputs[0].default_value = tuple(bc.default_value)
             nt.links.new(rgb.outputs[0], mul.inputs[6])
-        nt.links.new(lm.outputs['Color'], mul.inputs[7])  # B
-        nt.links.new(mul.outputs[2], bsdf.inputs['Emission Color'])
+        nt.links.new(lm.outputs['Color'], mul.inputs[7])
+        # Clear existing emission links, wire the multiply
+        for l in list(em_color.links):
+            nt.links.remove(l)
+        nt.links.new(mul.outputs[2], em_color)
+        em_str.default_value = 1.0
+        # Make the destination image the bake target
+        dst_node = next((n for n in nt.nodes
+                         if n.type == 'TEX_IMAGE' and n.label == 'BAKE_TARGET'),
+                        None)
+        if dst_node is None:
+            dst_node = nt.nodes.new('ShaderNodeTexImage')
+            dst_node.label = 'BAKE_TARGET'
+        dst_node.image = dst_img
+        uv2 = nt.nodes.new('ShaderNodeUVMap')
+        uv2.uv_map = 'Lightmap'
+        nt.links.new(uv2.outputs['UV'], dst_node.inputs['Vector'])
+        nt.nodes.active = dst_node
+
+    # Run the EMIT bake
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.context.scene.render.bake.margin = 4
+    bpy.ops.object.bake(type='EMIT')
+
+    # Restore each material's emission to the original state so realtime
+    # lights still behave correctly when the mesh is later viewed.
+    for s in saved:
+        m = s['m']
+        nt = m.node_tree
+        bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+        if bsdf is None:
+            continue
+        em_color = bsdf.inputs['Emission Color']
+        em_str = bsdf.inputs['Emission Strength']
+        for l in list(em_color.links):
+            nt.links.remove(l)
+        em_color.default_value = s['em_color_val']
+        em_str.default_value = s['em_str_val']
+    return dst_img
+
+
+def attach_flattened_to_materials(obj, flat_img):
+    """After the 2nd EMIT bake, the flattened (base × light) image is a single
+    self-contained texture. Wire it into the Principled BSDF's Emission Color
+    (UV='Lightmap') so the glTF exporter packages it as emissiveTexture +
+    TEXCOORD_1. The viewer puts that map into the GI slot.
+    The base colour stays connected on its own input (UV0) so realtime fixture
+    lights can still spill on top of the bake."""
+    for slot in obj.material_slots:
+        m = slot.material
+        if m is None or not m.use_nodes:
+            continue
+        nt = m.node_tree
+        bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+        if bsdf is None:
+            continue
+        em = bsdf.inputs['Emission Color']
+        # remove any leftover emission links
+        for l in list(em.links):
+            nt.links.remove(l)
+        uv = nt.nodes.new('ShaderNodeUVMap')
+        uv.uv_map = 'Lightmap'
+        tex = nt.nodes.new('ShaderNodeTexImage')
+        tex.image = flat_img
+        tex.label = 'FLAT_BAKE'
+        nt.links.new(uv.outputs['UV'], tex.inputs['Vector'])
+        nt.links.new(tex.outputs['Color'], em)
         bsdf.inputs['Emission Strength'].default_value = 1.0
 
 
@@ -283,14 +355,17 @@ def main():
     add_fill_areas(meshes)
     add_fixtures(spec)
 
-    # 1) Per-mesh UV2 unwrap + bake into a per-mesh lightmap image
+    # 1) Per-mesh UV2 unwrap + 2-pass bake (DIFFUSE light, then EMIT flatten)
     for i, obj in enumerate(meshes):
         unwrap_lightmap_uv(obj)
-        img = make_lightmap_image(f"lightmap_{i:03d}", args.resolution)
-        setup_bake_target(obj, img)
-        print(f"[lmap] baking {obj.name}…")
-        bake_lightmap(obj, img)
-        attach_lightmap_to_materials(obj, img)
+        light_img = make_lightmap_image(f"lightmap_{i:03d}", args.resolution)
+        flat_img  = make_lightmap_image(f"baked_{i:03d}",    args.resolution)
+        setup_bake_target(obj, light_img)
+        print(f"[lmap] pass 1/2 (DIFFUSE light) {obj.name}…")
+        bake_lightmap(obj, light_img)
+        print(f"[lmap] pass 2/2 (EMIT flatten) {obj.name}…")
+        bake_emit_flatten(obj, light_img, flat_img)
+        attach_flattened_to_materials(obj, flat_img)
 
     # 2) Export — embed images, keep UV1 + UV2
     out = os.path.abspath(args.out)

@@ -1812,11 +1812,12 @@ const loader = new GLTFLoader();
 loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   const model = gltf.scene; MODEL = model;
   scene.add(model);
-  // Detect lightmap-equipped GLBs (exported by bake_lightmap.py): the
-  // emissiveMap carries the bake. Convert ONLY the architectural "shell"
-  // materials (walls, floor, ceiling, wood/stone surfaces) to pre-lit
-  // MeshBasicMaterial. Everything else keeps its PBR shader so glass stays
-  // transmissive, lamps glow, fabric reads as fabric, etc.
+  // Detect lightmap-equipped GLBs (exported by bake_lightmap.py): emissiveMap
+  // carries a (base × light) flattened bake on UV2 (TEXCOORD_1). Keep the
+  // MeshStandard shader (so realtime fixture lights still spill on top with
+  // their halos and shadows) but feed the bake as emission with strength 1
+  // and configure UV2 for the map. ONLY the architectural shell gets this
+  // treatment — glass/lamps/fabric/plants/people stay untouched.
   const hasUV2 = (g) => g && g.attributes && g.attributes.uv1;
   const PRELIT_OK = new Set([
     'wall', 'slab', 'roof', 'frame',
@@ -1831,17 +1832,16 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
       const nm = m ? m.name : '';
       if(nm==='glass' || nm==='window') o.castShadow = false;
       if(nm==='lamp'){ o.castShadow=false; m.emissiveIntensity=1.4; }
-      // Pre-lit conversion: opaque shell surfaces only
       if(m && m.emissiveMap && hasUV2(o.geometry) && PRELIT_OK.has(nm)){
-        const baked = m.emissiveMap;
-        baked.channel = 1;
-        baked.colorSpace = THREE.SRGBColorSpace;
-        const basic = new THREE.MeshBasicMaterial({
-          name: nm,
-          map: baked,
-          side: m.side,
-        });
-        o.material = basic;
+        // Treat the bake as a flat colour, on UV2.
+        m.emissiveMap.channel = 1;
+        m.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+        m.emissive = new THREE.Color(0xffffff);
+        m.emissiveIntensity = 1.0;
+        // Dim the runtime base contribution so the bake dominates without
+        // washing out, but keep MeshStandard so SpotLights still cast halos.
+        m.color.multiplyScalar(0.25);
+        m.needsUpdate = true;
         lightmapped++;
       }
       applyTexture(o.material);
@@ -1849,10 +1849,13 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
     }
   });
   if(lightmapped){
-    console.log(`plan-to-3d: ${lightmapped} pre-lit meshes (MeshBasic + lightmap)`);
-    // Pre-lit meshes are MeshBasic → already insensitive to runtime lights.
-    // The remaining PBR meshes (lamps, art, sprites) get a moderate boost so
-    // they sit in the same exposure range as the baked image.
+    console.log(`plan-to-3d: ${lightmapped} GI-emissive shell meshes (PBR + bake)`);
+    // The bake encodes daylight + GI + fixture pools. Dim the sun and IBL
+    // so we don't double-light, but keep fixtures (point / spot) alive
+    // because their realtime halos and shadows are what sells the look.
+    scene.environmentIntensity = 0.25;
+    sun.intensity = 0.4;
+    fill.intensity = 0.2;
     renderer.toneMappingExposure = 1.0;
   }
 
