@@ -247,6 +247,27 @@ Outputs `model.glb`, `viewer.html`, and (with `--preview`) `preview.png`.
   is embedded as base64) and `model.glb` (import into Blender, FreeCAD,
   SketchUp Free, or any online glTF viewer). Send the files to the user.
 
+### 6. (Optional) Photoreal render with Cycles GI
+
+For a single museum-grade still — proper global illumination, soft contact
+shadows, light pools under downlights — run the optional bake pipeline:
+
+```
+python3 bake.py building.json [--samples 256] [--res 1920x1080]
+                              [--exposure 1.2] [--keep-roof]
+                              [--cam ex,ey,ez,tx,ty,tz]
+```
+
+This rebuilds the GLB without the roof (so the interior is visible), then
+launches Blender headless. Cycles is auto-configured for Apple Metal GPU when
+available. The author-side render takes ~30 s – 5 min depending on samples;
+the output `render.png` is a normal image anyone can open — the heavy lifting
+happens once on the author's machine, the file is light, so "pour tout le monde"
+is preserved. Each light fixture in `furniture[]` (downlight / pendant / sconce
+/ floor_lamp) becomes a real Cycles light, plus a Hosek-Wilkie sky.
+
+Requires Blender (`brew install --cask blender` on macOS).
+
 ## Multi-floor buildings
 
 Model each floor as its own `building.json` and generate separately, or stack
