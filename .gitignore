@@ -1,0 +1,12 @@
+# generated outputs
+work/
+output/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store

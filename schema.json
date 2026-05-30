@@ -73,6 +73,35 @@
                  "description": "interior anchor point for the label (plan coords)"}
         }
       }
+    },
+    "furniture": {
+      "type": "array",
+      "description": "Interior furniture, appliances, fixtures, stairs. Each item is rendered as an oriented box (or a flight of steps for stairs).",
+      "items": {
+        "type": "object",
+        "required": ["type", "at"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Known: bed, single_bed, double_bed, king_bed, sofa, armchair, chair, stool, coffee_table, dining_table, table, desk, nightstand, counter, kitchen_counter, island, cabinet, wardrobe, closet, bookshelf, fridge, stove, oven, dishwasher, washing_machine, tv, sink, kitchen_sink, toilet, bathtub, shower, bidet, stairs, rug, generic. Unknown types fall back to a generic box."
+          },
+          "at": {
+            "type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2,
+            "description": "center of the footprint in plan coords (m)"
+          },
+          "size": {
+            "type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2,
+            "description": "footprint [width, depth] in metres BEFORE rotation. Defaults from the type."
+          },
+          "height": {"type": "number", "description": "object height (m). Defaults from the type. For stairs, total rise to climb."},
+          "rotation": {"type": "number", "description": "rotation in degrees around the vertical axis (0 = width along plan X)"},
+          "z": {"type": "number", "description": "base elevation (m). Default 0 (sitting on the slab). Use to wall-mount or stack."},
+          "color": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 4,
+                    "description": "optional override RGBA in [0..1]"},
+          "steps": {"type": "integer", "description": "stairs only: number of treads (default ~ height/0.17)"},
+          "name": {"type": "string", "description": "optional label (currently unused in viewer)"}
+        }
+      }
     }
   }
 }

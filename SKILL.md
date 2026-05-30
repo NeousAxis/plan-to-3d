@@ -61,6 +61,38 @@ Open each PNG with the Read tool and extract, carefully:
 - **Openings.** Doors (sill 0) and windows (sill ~0.9 m) with their position
   along the host wall and width.
 - **Rooms.** Name + an interior anchor point for each labelled room.
+- **Interior fixtures and furniture.** Look for these symbols and add an entry
+  for each in `furniture[]` (see step 3). Don't skip them — interiors are what
+  make the 3D readable. Estimate position (centre of the symbol) and rotation
+  (degrees; 0 means the item's "width" runs along plan X). Typical symbols:
+    - **Bed** — rectangle with a thin pillow band at one short side. Single
+      ~0.9×2.0 m, double ~1.6×2.0, king ~1.8×2.0.
+    - **Sofa** — long rectangle (2.0–2.5 m), often with cushion subdivisions
+      and a thicker back along one long side. Depth ~0.9 m.
+    - **Armchair** — small square ~0.9×0.9 with a rounded back arc.
+    - **Dining table + chairs** — central rectangle/circle (~1.6×0.9) ringed
+      by 4–8 small squares (chairs).
+    - **Coffee table** — small low rectangle in front of a sofa.
+    - **Desk** — rectangle ~1.4×0.7, usually against a wall with a chair.
+    - **Kitchen counter / island** — long thin shape (depth ~0.6) along walls.
+      Embedded circles/ovals = sink; square with 4 small circles = hob/stove;
+      square ~0.6×0.6 = oven/dishwasher.
+    - **Fridge** — square ~0.7×0.7 at the end of a counter (often labelled
+      "REF" or with a diagonal split symbol).
+    - **Wardrobe / closet** — long thin rectangle against a wall (depth ~0.6),
+      often with sliding-door arrows or a diagonal indicating door swing.
+    - **Bookshelf** — thin rectangle (depth ~0.3) against a wall.
+    - **TV** — very thin rectangle on a wall.
+    - **Toilet** — pill / keyhole shape ~0.4×0.65 against a wall.
+    - **Sink (bathroom)** — small rectangle/oval ~0.6×0.45 against a wall.
+    - **Bathtub** — long rounded rectangle ~1.7×0.75.
+    - **Shower** — square ~0.9×0.9 with a diagonal cross or drain dot.
+    - **Stairs** — a ladder of parallel lines (treads) with an arrow showing
+      the up direction. Use `type: "stairs"`, `size: [tread_width, total_run]`,
+      `height: total_rise`, `rotation` along the climb direction. The
+      generator auto-picks ~17 cm per step unless you set `steps`.
+  If a symbol is ambiguous, prefer a sensible default over skipping it —
+  an empty 3D room is the worst outcome.
 
 Set up a metre coordinate system with origin at the bottom-left of the
 footprint, X to the right, Y upward in plan.
@@ -77,7 +109,21 @@ Follow `schema.json`. Minimal shape:
                 "width": 0.9, "sill": 0.0, "height": 2.1}],
   "slab": {"enabled": true, "thickness": 0.15},
   "roof": {"type": "flat|gable|none", "height": 1.5, "overhang": 0.3, "ridge_axis": "x"},
-  "rooms": [{"name": "Living room", "at": [x, y]}]
+  "rooms": [{"name": "Living room", "at": [x, y]}],
+  "furniture": [
+    {"type": "double_bed",   "at": [6.5, 2.0], "rotation": 0},
+    {"type": "sofa",         "at": [2.5, 1.2], "rotation": 0},
+    {"type": "dining_table", "at": [2.5, 4.2], "rotation": 0},
+    {"type": "chair",        "at": [1.7, 4.2], "rotation": 0},
+    {"type": "kitchen_counter","at": [4.2, 5.6], "size": [3.4, 0.6], "rotation": 0},
+    {"type": "fridge",       "at": [4.6, 5.6], "rotation": 0},
+    {"type": "stove",        "at": [3.4, 5.6], "rotation": 0},
+    {"type": "kitchen_sink", "at": [5.5, 5.6], "rotation": 0},
+    {"type": "toilet",       "at": [7.5, 5.5], "rotation": 0},
+    {"type": "bathtub",      "at": [7.0, 4.0], "rotation": 90},
+    {"type": "stairs",       "at": [6.0, 3.0], "size": [1.0, 3.2],
+     "height": 2.7, "rotation": 90}
+  ]
 }
 ```
 
@@ -88,6 +134,18 @@ Rules of thumb:
 - Flat roof for an intermediate apartment floor; gable for a standalone house;
   `none` to leave the top open (dollhouse).
 - One `rooms[]` entry per labelled space; `at` is any point inside the room.
+- `furniture[]` is optional but strongly encouraged. Each item is a known
+  type (see schema.json for the full list) plus an `at` centre point. The
+  generator has built-in default size/height/colour for every type, so
+  `{"type": "sofa", "at": [x, y]}` already produces a credible sofa. Override
+  `size: [w, d]` and `height` when the plan shows a clearly non-standard item
+  (e.g. an L-shaped sofa modelled as two boxes, or a kingsize bed). Set
+  `rotation` (degrees) so the long side runs the way the symbol does on the
+  plan. Pull items at least 5–10 cm away from walls — overlapping walls
+  causes z-fighting in the viewer.
+- Stairs use `type: "stairs"`, `size: [tread_width, total_run]`,
+  `height: total_rise` (top floor level). Add `"steps": N` only if you want
+  to force a specific count; otherwise the generator picks ~17 cm risers.
 
 ### 4. Generate
 

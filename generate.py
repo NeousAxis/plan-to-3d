@@ -32,11 +32,62 @@ import sys
 # Materials (baseColorFactor RGBA, alphaMode, doubleSided)
 # ---------------------------------------------------------------------------
 MATERIALS = {
-    "wall":   {"color": [0.86, 0.85, 0.82, 1.0], "alpha": "OPAQUE"},
-    "slab":   {"color": [0.55, 0.55, 0.57, 1.0], "alpha": "OPAQUE"},
-    "roof":   {"color": [0.66, 0.26, 0.20, 1.0], "alpha": "OPAQUE"},
-    "window": {"color": [0.52, 0.72, 0.90, 0.45], "alpha": "BLEND"},
-    "door":   {"color": [0.45, 0.30, 0.18, 1.0], "alpha": "OPAQUE"},
+    "wall":      {"color": [0.86, 0.85, 0.82, 1.0], "alpha": "OPAQUE"},
+    "slab":      {"color": [0.55, 0.55, 0.57, 1.0], "alpha": "OPAQUE"},
+    "roof":      {"color": [0.66, 0.26, 0.20, 1.0], "alpha": "OPAQUE"},
+    "window":    {"color": [0.52, 0.72, 0.90, 0.45], "alpha": "BLEND"},
+    "door":      {"color": [0.45, 0.30, 0.18, 1.0], "alpha": "OPAQUE"},
+    # Interior furniture / fixtures / stairs (one bucket per visual family)
+    "bed":       {"color": [0.82, 0.74, 0.62, 1.0], "alpha": "OPAQUE"},
+    "seat":      {"color": [0.32, 0.38, 0.46, 1.0], "alpha": "OPAQUE"},
+    "table":     {"color": [0.52, 0.36, 0.24, 1.0], "alpha": "OPAQUE"},
+    "counter":   {"color": [0.78, 0.66, 0.50, 1.0], "alpha": "OPAQUE"},
+    "appliance": {"color": [0.62, 0.64, 0.68, 1.0], "alpha": "OPAQUE"},
+    "sanitary":  {"color": [0.93, 0.94, 0.95, 1.0], "alpha": "OPAQUE"},
+    "stairs":    {"color": [0.70, 0.70, 0.72, 1.0], "alpha": "OPAQUE"},
+    "rug":       {"color": [0.50, 0.30, 0.32, 1.0], "alpha": "OPAQUE"},
+    "furniture": {"color": [0.55, 0.50, 0.45, 1.0], "alpha": "OPAQUE"},
+}
+
+# Per-type defaults: footprint [w, d] in m, height in m, and which material
+# bucket (color) the item belongs to. Types not listed here fall back to
+# "furniture" with a generic 1x1x0.8 box.
+FURNITURE_TYPES = {
+    "bed":             {"size": [1.6, 2.0, 0.5], "material": "bed"},
+    "single_bed":      {"size": [0.9, 2.0, 0.5], "material": "bed"},
+    "double_bed":      {"size": [1.6, 2.0, 0.5], "material": "bed"},
+    "king_bed":        {"size": [1.8, 2.0, 0.5], "material": "bed"},
+    "sofa":            {"size": [2.2, 0.95, 0.85], "material": "seat"},
+    "armchair":        {"size": [0.9, 0.9, 0.85], "material": "seat"},
+    "chair":           {"size": [0.45, 0.45, 0.9], "material": "seat"},
+    "stool":           {"size": [0.4, 0.4, 0.75], "material": "seat"},
+    "coffee_table":    {"size": [1.2, 0.6, 0.45], "material": "table"},
+    "dining_table":    {"size": [1.6, 0.9, 0.75], "material": "table"},
+    "table":           {"size": [1.2, 0.8, 0.75], "material": "table"},
+    "desk":            {"size": [1.4, 0.7, 0.75], "material": "table"},
+    "nightstand":      {"size": [0.45, 0.4, 0.55], "material": "table"},
+    "counter":         {"size": [2.0, 0.6, 0.9], "material": "counter"},
+    "kitchen_counter": {"size": [2.0, 0.6, 0.9], "material": "counter"},
+    "island":          {"size": [2.0, 1.0, 0.9], "material": "counter"},
+    "cabinet":         {"size": [0.8, 0.4, 0.9], "material": "counter"},
+    "wardrobe":        {"size": [1.5, 0.6, 2.0], "material": "counter"},
+    "closet":          {"size": [1.5, 0.6, 2.0], "material": "counter"},
+    "bookshelf":       {"size": [1.0, 0.3, 1.8], "material": "counter"},
+    "fridge":          {"size": [0.7, 0.7, 1.8], "material": "appliance"},
+    "stove":           {"size": [0.6, 0.6, 0.9], "material": "appliance"},
+    "oven":            {"size": [0.6, 0.6, 0.9], "material": "appliance"},
+    "dishwasher":      {"size": [0.6, 0.6, 0.85], "material": "appliance"},
+    "washing_machine": {"size": [0.6, 0.6, 0.85], "material": "appliance"},
+    "tv":              {"size": [1.2, 0.1, 0.7], "material": "appliance"},
+    "sink":            {"size": [0.6, 0.45, 0.9], "material": "sanitary"},
+    "kitchen_sink":    {"size": [0.8, 0.5, 0.9], "material": "sanitary"},
+    "toilet":          {"size": [0.4, 0.65, 0.4], "material": "sanitary"},
+    "bathtub":         {"size": [1.7, 0.75, 0.55], "material": "sanitary"},
+    "shower":          {"size": [0.9, 0.9, 0.1],  "material": "sanitary"},
+    "bidet":           {"size": [0.4, 0.55, 0.4], "material": "sanitary"},
+    "stairs":          {"size": [1.0, 3.0, 2.7], "material": "stairs"},
+    "rug":             {"size": [2.0, 1.5, 0.015], "material": "rug"},
+    "generic":         {"size": [1.0, 1.0, 0.8], "material": "furniture"},
 }
 
 EPS = 1e-6
@@ -126,6 +177,91 @@ def aabb_box(mesh, material, minx, miny, maxx, maxy, z0, z1):
     mesh.add_box8(material, corners)
 
 
+def oriented_furniture_box(mesh, material, center, size_xy, rotation_deg, z0, z1):
+    """Axis-aligned box rotated `rotation_deg` around the vertical axis
+    about `center` (plan coords). size_xy = [width along local X, depth along local Y]."""
+    cx, cy = center
+    w, d = size_xy
+    if w < EPS or d < EPS or (z1 - z0) < EPS:
+        return
+    angle = math.radians(rotation_deg)
+    ca, sa = math.cos(angle), math.sin(angle)
+    hw, hd = w / 2.0, d / 2.0
+    local = [(-hw, -hd), (hw, -hd), (hw, hd), (-hw, hd)]
+    pts = []
+    for lx, ly in local:
+        rx = cx + lx * ca - ly * sa
+        ry = cy + lx * sa + ly * ca
+        pts.append((rx, ry))
+    corners = [
+        (pts[0][0], z0, pts[0][1]), (pts[1][0], z0, pts[1][1]),
+        (pts[2][0], z0, pts[2][1]), (pts[3][0], z0, pts[3][1]),
+        (pts[0][0], z1, pts[0][1]), (pts[1][0], z1, pts[1][1]),
+        (pts[2][0], z1, pts[2][1]), (pts[3][0], z1, pts[3][1]),
+    ]
+    mesh.add_box8(material, corners)
+
+
+def build_stairs(mesh, material, center, width, run, rotation_deg, z0, total_rise, n_steps):
+    """Render a flight of stairs climbing along local +Y from -run/2 to +run/2.
+    Each tread is a solid block from the floor (z0) up to its own top, so the
+    overall silhouette is a clean ascending staircase."""
+    if n_steps < 1 or run < EPS or total_rise < EPS:
+        return
+    cx, cy = center
+    step_run = run / n_steps
+    step_rise = total_rise / n_steps
+    angle = math.radians(rotation_deg)
+    ca, sa = math.cos(angle), math.sin(angle)
+    hw = width / 2.0
+    half_run = run / 2.0
+    for i in range(n_steps):
+        y0 = -half_run + i * step_run
+        y1 = y0 + step_run
+        top_z = z0 + (i + 1) * step_rise
+        local = [(-hw, y0), (hw, y0), (hw, y1), (-hw, y1)]
+        pts = []
+        for lx, ly in local:
+            rx = cx + lx * ca - ly * sa
+            ry = cy + lx * sa + ly * ca
+            pts.append((rx, ry))
+        corners = [
+            (pts[0][0], z0, pts[0][1]), (pts[1][0], z0, pts[1][1]),
+            (pts[2][0], z0, pts[2][1]), (pts[3][0], z0, pts[3][1]),
+            (pts[0][0], top_z, pts[0][1]), (pts[1][0], top_z, pts[1][1]),
+            (pts[2][0], top_z, pts[2][1]), (pts[3][0], top_z, pts[3][1]),
+        ]
+        mesh.add_box8(material, corners)
+
+
+def build_furniture(mesh, items):
+    """Render every furniture / fixture / stairs item from spec['furniture']."""
+    if not items:
+        return
+    for item in items:
+        t = str(item.get("type", "generic"))
+        defaults = FURNITURE_TYPES.get(t, FURNITURE_TYPES["generic"])
+        material = defaults["material"]
+        # size: may be partial (override w/d only, keep default h)
+        size = item.get("size")
+        if size and len(size) >= 2:
+            w = float(size[0]); d = float(size[1])
+        else:
+            w, d = float(defaults["size"][0]), float(defaults["size"][1])
+        height = float(item.get("height", defaults["size"][2]))
+        at = item.get("at", [0.0, 0.0])
+        cx, cy = float(at[0]), float(at[1])
+        rot = float(item.get("rotation", 0.0))
+        z0 = float(item.get("z", 0.0))
+
+        if t == "stairs":
+            n_steps = int(item.get("steps", max(2, round(height / 0.17))))
+            build_stairs(mesh, material, (cx, cy), w, d, rot, z0, height, n_steps)
+        else:
+            oriented_furniture_box(mesh, material, (cx, cy),
+                                   (w, d), rot, z0, z0 + height)
+
+
 # ---------------------------------------------------------------------------
 # Build the model from the spec
 # ---------------------------------------------------------------------------
@@ -208,6 +344,8 @@ def build_model(spec):
     roof = spec.get("roof")
     if roof and roof.get("type", "none") != "none" and bbox:
         _build_roof(mesh, roof, bbox, default_h)
+
+    build_furniture(mesh, spec.get("furniture", []))
 
     rooms = []
     for r in spec.get("rooms", []):
@@ -481,6 +619,21 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
     obj.position.set(l.x, l.y, l.z);
     scene.add(obj);
   }
+
+  // Debug / scripting handle: lets you toggle materials by name, move the
+  // camera, etc. from the browser console. Harmless for end users.
+  window.__viewer = {THREE, scene, camera, controls, model, center, radius,
+    setMaterialVisible(name, visible){
+      model.traverse(o => {
+        if(o.isMesh && o.material && o.material.name === name){
+          o.visible = visible;
+        }
+      });
+    },
+    topDown(){
+      camera.position.set(center.x, center.y + radius*1.6, center.z + 0.01);
+      controls.target.copy(center); controls.update();
+    }};
 }, (err) => { console.error('GLB parse error', err); });
 
 addEventListener('resize', () => {
@@ -613,9 +766,9 @@ def main():
     print("model:   %s (%d bytes)" % (glb_path, len(glb)))
     print("viewer:  %s" % viewer_path)
     print("title:   %s" % title)
-    print("walls:   %d | openings: %d | rooms: %d | triangles: %d" % (
+    print("walls:   %d | openings: %d | rooms: %d | furniture: %d | triangles: %d" % (
         len(spec.get("walls", [])), len(spec.get("openings", [])),
-        len(rooms), tri))
+        len(rooms), len(spec.get("furniture", [])), tri))
 
     if args.preview:
         ppath = os.path.join(args.out, "preview.png")
