@@ -159,7 +159,7 @@ def upgrade_materials():
 def add_sun(angle_deg=40):
     bpy.ops.object.light_add(type='SUN')
     sun = bpy.context.object
-    sun.data.energy = 6.0                      # brighter, gallery-grade key
+    sun.data.energy = 3.5
     sun.data.angle = math.radians(2.5)
     sun.rotation_euler = (math.radians(angle_deg), 0, math.radians(35))
     return sun
@@ -206,7 +206,7 @@ def add_fill_areas(meshes):
     # Big "skylight" hovering just above the ceiling, pointing down
     bpy.ops.object.light_add(type='AREA')
     L = bpy.context.object
-    L.data.energy = 800
+    L.data.energy = 350
     L.data.shape = 'RECTANGLE'
     L.data.size = sx * 0.9
     L.data.size_y = sy * 0.9

@@ -45,6 +45,8 @@ MATERIALS = {
     # --- shell ---
     "wall":       _mat([0.91, 0.90, 0.88, 1.0], rough=0.93),
     "slab":       _mat([0.78, 0.78, 0.80, 1.0], rough=0.75),
+    "floor_wood": _mat([0.78, 0.62, 0.42, 1.0], rough=0.55),  # parquet
+    "floor_tile": _mat([0.82, 0.82, 0.84, 1.0], rough=0.35),  # bathroom/kitchen ceramic
     "roof":       _mat([0.66, 0.26, 0.20, 1.0], rough=0.85),
     "glass":      _mat([0.60, 0.76, 0.90, 0.20], rough=0.05, alpha="BLEND"),
     "window":     _mat([0.60, 0.76, 0.90, 0.28], rough=0.05, alpha="BLEND"),
@@ -894,8 +896,18 @@ def build_model(spec):
 
     build_furniture(mesh, spec.get("furniture", []))
 
+    # Per-room floor finish: drop a thin coloured slab JUST above the main
+    # slab, sized to the room's rectangle. `extent` is [x_min, y_min, x_max,
+    # y_max] in plan coords; `floor_finish` is a material name (e.g.
+    # "floor_wood", "floor_tile", "carpet").
     rooms = []
     for r in spec.get("rooms", []):
+        ext = r.get("extent")
+        finish = r.get("floor_finish")
+        if ext and finish:
+            xm, ym, xM, yM = ext
+            aabb_box(mesh, finish, float(xm), float(ym), float(xM), float(yM),
+                     0.001, 0.012)
         rooms.append({
             "name": str(r.get("name", "")),
             "x": float(r["at"][0]),
@@ -1529,6 +1541,63 @@ function texArt(hue){
   t.repeat.set(1, 1);
   return t;
 }
+function texFloorWood(){
+  // Light parquet boards: alternating tone planks running along X. Each plank
+  // shows its own grain — mimics the chevrons / planches you see in the plan.
+  const s = 1024, c = mkCanvas(s), x = c.getContext('2d');
+  x.fillStyle = '#cba480'; x.fillRect(0, 0, s, s);
+  const plankW = 96, plankH = s;
+  for(let p = 0, px = 0; px < s; p++, px += plankW){
+    // each plank a different warm tone
+    const tone = 195 + Math.random()*30;     // 195..225 base lightness
+    const r = Math.round(tone*0.82), g = Math.round(tone*0.66), b = Math.round(tone*0.48);
+    x.fillStyle = `rgb(${r},${g},${b})`;
+    x.fillRect(px, 0, plankW, plankH);
+    // dense vertical grain
+    for(let i = 0; i < 800; i++){
+      const gx = px + Math.random()*plankW;
+      const gy = Math.random()*plankH;
+      const gh = Math.random()*180 + 40;
+      x.strokeStyle = (Math.random() > 0.5
+        ? `rgba(70,42,22,${(Math.random()*0.16).toFixed(2)})`
+        : `rgba(255,230,200,${(Math.random()*0.14).toFixed(2)})`);
+      x.lineWidth = Math.random()*1.4 + 0.3;
+      x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + (Math.random()-0.5)*3, gy + gh);
+      x.stroke();
+    }
+    // dark joint line at plank boundary
+    x.strokeStyle = 'rgba(40,22,8,0.6)';
+    x.lineWidth = 1.2;
+    x.beginPath(); x.moveTo(px+plankW-0.5, 0); x.lineTo(px+plankW-0.5, s); x.stroke();
+  }
+  return finishTex(c, 2.0);
+}
+function texFloorTile(){
+  // 30 cm ceramic tiles, soft grey, with grout lines.
+  const s = 1024, c = mkCanvas(s), x = c.getContext('2d');
+  // tile body (slight gradient per tile to avoid flatness)
+  const tile = 192;  // px per tile (=> 1 tile / 0.3 m if t.repeat ~0.3)
+  for(let ty = 0; ty < s; ty += tile){
+    for(let tx = 0; tx < s; tx += tile){
+      const L = 200 + Math.random()*25;  // 200..225 lightness
+      x.fillStyle = `rgb(${L|0},${L|0},${(L+3)|0})`;
+      x.fillRect(tx, ty, tile, tile);
+      // tiny noise per tile
+      for(let i = 0; i < 80; i++){
+        x.fillStyle = `rgba(160,160,165,${(Math.random()*0.08).toFixed(2)})`;
+        x.fillRect(tx + Math.random()*tile, ty + Math.random()*tile, 1, 1);
+      }
+    }
+  }
+  // grout
+  x.strokeStyle = '#6f7077';
+  x.lineWidth = 4;
+  for(let i = 0; i <= s; i += tile){
+    x.beginPath(); x.moveTo(i, 0); x.lineTo(i, s); x.stroke();
+    x.beginPath(); x.moveTo(0, i); x.lineTo(s, i); x.stroke();
+  }
+  return finishTex(c, 1.5);
+}
 function texCeilingDark(){
   // Anthracite "origami" ceiling: triangular faceted panels that catch
   // grazing light differently per face. Mirrors the dark, design ceiling
@@ -1590,6 +1659,8 @@ const TEXFOR = {
   art:         ()=>texArt(window.__artHue ?? 225),
   ceiling_perf:()=>texPerforated(),
   ceiling_dark:()=>texCeilingDark(),
+  floor_wood:  ()=>texFloorWood(),
+  floor_tile:  ()=>texFloorTile(),
 };
 // Silhouette billboard for "entourage" figures (the semi-transparent ghosts
 // in arch-viz). Drawn once on a canvas, reused as a Sprite per person.
