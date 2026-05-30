@@ -1812,12 +1812,17 @@ const loader = new GLTFLoader();
 loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   const model = gltf.scene; MODEL = model;
   scene.add(model);
-  // Detect lightmap-equipped GLBs (those exported by bake_lightmap.py): they
-  // carry a 2nd UV channel and an emissive texture that's actually the baked
-  // (lightmap × base colour) result. For these, switch to MeshBasicMaterial:
-  // no realtime shading, the colour IS the pre-lit image. UV channel 1
-  // because the bake lives on TEXCOORD_1.
+  // Detect lightmap-equipped GLBs (exported by bake_lightmap.py): the
+  // emissiveMap carries the bake. Convert ONLY the architectural "shell"
+  // materials (walls, floor, ceiling, wood/stone surfaces) to pre-lit
+  // MeshBasicMaterial. Everything else keeps its PBR shader so glass stays
+  // transmissive, lamps glow, fabric reads as fabric, etc.
   const hasUV2 = (g) => g && g.attributes && g.attributes.uv1;
+  const PRELIT_OK = new Set([
+    'wall', 'slab', 'roof', 'frame',
+    'ceiling', 'ceiling_perf', 'ceiling_dark',
+    'wood', 'wood_light', 'stone', 'concrete',
+  ]);
   let lightmapped = 0;
   model.traverse(o => {
     if(o.isMesh){
@@ -1826,16 +1831,14 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
       const nm = m ? m.name : '';
       if(nm==='glass' || nm==='window') o.castShadow = false;
       if(nm==='lamp'){ o.castShadow=false; m.emissiveIntensity=1.4; }
-      // Pre-lit conversion for lightmap-baked meshes
-      if(m && m.emissiveMap && hasUV2(o.geometry) && nm !== 'lamp' && nm !== 'art'){
+      // Pre-lit conversion: opaque shell surfaces only
+      if(m && m.emissiveMap && hasUV2(o.geometry) && PRELIT_OK.has(nm)){
         const baked = m.emissiveMap;
-        baked.channel = 1;   // use TEXCOORD_1 (the lightmap UV)
+        baked.channel = 1;
         baked.colorSpace = THREE.SRGBColorSpace;
         const basic = new THREE.MeshBasicMaterial({
           name: nm,
           map: baked,
-          transparent: !!m.transparent,
-          alphaTest: m.alphaTest || 0,
           side: m.side,
         });
         o.material = basic;
