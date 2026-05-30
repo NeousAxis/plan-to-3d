@@ -5,10 +5,10 @@
 > **AVANCEMENT (2026-05-30) :**
 > - ✅ Étape 0 — cases à cocher des calques (Toit/Plafond/Murs/Verre/Sol/Mobilier/Luminaires/Étiquettes)
 > - ✅ Étape 1 — UV dans le GLB + textures procédurales (bois, terrazzo, marbre, plâtre, tissu, art abstrait)
-> - ✅ Étape 2 (partiel) — luminaires (sconce/downlight/pendant/floor_lamp) émissifs + vraies lumières ponctuelles plafonnées. **Reste : bloom/SSAO dégradables.**
+> - ✅ Étape 2 — luminaires (sconce/downlight/pendant/floor_lamp), spots dirigés vers le sol pour les downlights (cône qui dessine une flaque), bloom UnrealBloomPass avec auto-détection perf (off sur petit matériel)
 > - ✅ Étape 3 — caméra Visite (hauteur d'œil) + déplacement ZQSD/WASD/flèches
-> - ➕ Bonus : finition de mur (`finish`), comptoir d'accueil, banc, tableau encadré, plafond, exemple `lobby.json`
-> - ⬜ Étape 4 — entourage (silhouettes) + image d'art fournie + plafond métal perforé (texture alpha)
+> - ✅ Étape 4 (partiel) — entourage (silhouettes-billboards procédurales) — reste : image d'art fournie + plafond métal perforé (texture alpha)
+> - ➕ Bonus : finition de mur (`finish`), comptoir d'accueil, banc, tableau encadré, plafond, exemple `lobby.json`, calibrage exposure/IBL pour contraste sculpté
 > - ⬜ Étape 5 — photoréaliste côté créateur : 5A lightmaps cuits / 5B stills Blender
 > - ⬜ Étape 6 — paliers de perf, hors-ligne total, replis WebGL2
 

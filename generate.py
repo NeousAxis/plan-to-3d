@@ -44,7 +44,7 @@ def _mat(color, rough=0.85, metal=0.0, alpha="OPAQUE", emissive=None):
 MATERIALS = {
     # --- shell ---
     "wall":       _mat([0.91, 0.90, 0.88, 1.0], rough=0.93),
-    "slab":       _mat([0.62, 0.62, 0.64, 1.0], rough=0.95),
+    "slab":       _mat([0.78, 0.78, 0.80, 1.0], rough=0.75),
     "roof":       _mat([0.66, 0.26, 0.20, 1.0], rough=0.85),
     "glass":      _mat([0.60, 0.76, 0.90, 0.20], rough=0.05, alpha="BLEND"),
     "window":     _mat([0.60, 0.76, 0.90, 0.28], rough=0.05, alpha="BLEND"),
@@ -556,7 +556,8 @@ def b_sconce(mesh, fr, w, d, h, z0, item, mat):
 
 def b_downlight(mesh, fr, w, d, h, z0, item, mat):
     base = z0 if z0 > EPS else 2.88
-    cyl_local(mesh, "lamp", fr, 0, 0, min(w, d) / 2, base - h, base, segs=14)
+    # Recessed below the ceiling soffit, so the bulb is INSIDE the room.
+    cyl_local(mesh, "lamp", fr, 0, 0, min(w, d) / 2, base - h - 0.02, base - 0.02, segs=14)
 
 
 def b_pendant(mesh, fr, w, d, h, z0, item, mat):
@@ -963,6 +964,7 @@ VIEWER_TEMPLATE = r"""<!DOCTYPE html>
   <label><input type="checkbox" id="ck-floor" checked> Sol</label>
   <label><input type="checkbox" id="ck-furniture" checked> Mobilier</label>
   <label><input type="checkbox" id="ck-lights" checked> Luminaires</label>
+  <label><input type="checkbox" id="ck-people" checked> Personnes</label>
   <label><input type="checkbox" id="ck-labels" checked> Étiquettes</label>
   <div class="views">
     <button id="btn-iso">Iso</button>
@@ -983,9 +985,14 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const GLB_B64 = "__GLB_B64__";
 const LABELS = __LABELS__;
+const PEOPLE = __PEOPLE__;
 const SKY = 0xe9edf2;
 
 const app = document.getElementById('app');
@@ -999,14 +1006,17 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 0.85;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 app.appendChild(renderer.domElement);
 
 // Image-based lighting from a procedurally-generated room (no network needed),
-// so PBR materials pick up soft, realistic ambient reflections.
+// so PBR materials pick up soft, realistic ambient reflections. Kept faint so
+// the fixture spotlights drive the visual contrast.
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = envTex;
+scene.environmentIntensity = 0.35;
 
 // --- Procedural textures (canvas — no files, no network, tiny) ------------
 // UVs in the GLB are world metres, so texture.repeat = 1/tileSizeInMetres.
@@ -1103,6 +1113,60 @@ const TEXFOR = {
   bed:         ()=>texFabric('#dcd8d0', 1.0),
   art:         ()=>texArt(),
 };
+// Silhouette billboard for "entourage" figures (the semi-transparent ghosts
+// in arch-viz). Drawn once on a canvas, reused as a Sprite per person.
+function texPerson(variant){
+  const W=256, H=512, c=document.createElement('canvas');
+  c.width=W; c.height=H;
+  const x=c.getContext('2d');
+  // grey silhouette with soft edge + slight body shading
+  x.fillStyle='rgba(0,0,0,0)'; x.fillRect(0,0,W,H);
+  const grad = x.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,'rgba(110,116,124,0.78)');
+  grad.addColorStop(0.5,'rgba(60,65,72,0.85)');
+  grad.addColorStop(1,'rgba(110,116,124,0.78)');
+  x.fillStyle = grad;
+  // body silhouette: head, shoulders, torso, legs — variant 0 = standing,
+  // variant 1 = walking (slight stride). Coordinates are W=256, H=512.
+  const cx=W/2;
+  const stride = variant===1 ? 28 : 0;
+  // head
+  x.beginPath(); x.arc(cx, 70, 36, 0, 6.283); x.fill();
+  // neck + shoulders
+  x.fillRect(cx-12, 100, 24, 18);
+  x.beginPath(); x.moveTo(cx-78,135); x.quadraticCurveTo(cx,108,cx+78,135);
+  x.lineTo(cx+78,160); x.lineTo(cx-78,160); x.closePath(); x.fill();
+  // torso (tapered)
+  x.beginPath();
+  x.moveTo(cx-72,160); x.lineTo(cx+72,160);
+  x.lineTo(cx+50,300); x.lineTo(cx-50,300); x.closePath(); x.fill();
+  // arms
+  x.fillRect(cx-86, 150, 22, 150);
+  x.fillRect(cx+64, 150, 22, 150);
+  // legs (walking variant offsets feet)
+  x.beginPath();
+  x.moveTo(cx-50,300); x.lineTo(cx-12,300); x.lineTo(cx-12-stride,498);
+  x.lineTo(cx-44-stride,498); x.closePath(); x.fill();
+  x.beginPath();
+  x.moveTo(cx+12,300); x.lineTo(cx+50,300); x.lineTo(cx+44+stride,498);
+  x.lineTo(cx+12+stride,498); x.closePath(); x.fill();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = maxAniso;
+  return t;
+}
+const PERSON_TEX = [texPerson(0), texPerson(1)];
+function makePerson(x, z, h){
+  const tex = PERSON_TEX[(Math.random()*PERSON_TEX.length)|0];
+  const m = new THREE.SpriteMaterial({map: tex, transparent: true,
+    depthWrite: false, opacity: 0.78});
+  const s = new THREE.Sprite(m);
+  // sprite is unit square; person is ~h tall and 0.5*h wide for natural proportions
+  s.scale.set(h*0.5, h, 1);
+  s.position.set(x, h/2, z);
+  return s;
+}
+
 function applyTexture(mat){
   if(!mat || mat.userData.textured) return;
   const f = TEXFOR[mat.name];
@@ -1111,6 +1175,23 @@ function applyTexture(mat){
   mat.color.set(0xffffff);   // colour now comes from the texture
   mat.needsUpdate = true;
   mat.userData.textured = true;
+}
+
+// Optional bloom for glowing fixtures. Auto-disabled on low-end hardware so
+// the same viewer.html runs everywhere ("pour tout le monde").
+const QUALITY = (navigator.hardwareConcurrency||2) >= 4
+                && Math.min(innerWidth, innerHeight) >= 600
+                ? 'high' : 'low';
+let composer = null, bloomPass = null;
+if(QUALITY === 'high'){
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  // strength, radius, threshold — keep threshold high so only the emissive
+  // lamps bloom; furniture/floor stays clean.
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight),
+                                  0.28, 0.55, 0.95);
+  composer.addPass(bloomPass);
+  composer.addPass(new OutputPass());
 }
 
 const labelRenderer = new CSS2DRenderer();
@@ -1124,13 +1205,13 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.495;  // stay above the floor
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa3b0, 0.55));
-const sun = new THREE.DirectionalLight(0xfff4e6, 2.4);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa3b0, 0.18));
+const sun = new THREE.DirectionalLight(0xfff4e6, 0.7);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0004;
 scene.add(sun);
-const fill = new THREE.DirectionalLight(0xdfe7ff, 0.5);
+const fill = new THREE.DirectionalLight(0xdfe7ff, 0.3);
 fill.position.set(-1.2, 1.0, -0.8);
 scene.add(fill);
 
@@ -1153,7 +1234,7 @@ function layerOf(name){
   if(name==='lamp') return 'lights';
   return 'furniture';
 }
-const BUCKETS={roof:[],ceiling:[],walls:[],glass:[],floor:[],lights:[],furniture:[]};
+const BUCKETS={roof:[],ceiling:[],walls:[],glass:[],floor:[],lights:[],furniture:[],people:[]};
 const labelObjs=[];
 function setLayer(cat, vis){
   if(cat==='labels'){ labelObjs.forEach(o=>o.visible=vis); return; }
@@ -1209,7 +1290,7 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
       o.castShadow = true; o.receiveShadow = true;
       const nm = o.material ? o.material.name : '';
       if(nm==='glass' || nm==='window') o.castShadow = false;  // no heavy shadows
-      if(nm==='lamp'){ o.castShadow=false; o.material.emissiveIntensity=2.2; }
+      if(nm==='lamp'){ o.castShadow=false; o.material.emissiveIntensity=1.4; }
       applyTexture(o.material);
       (BUCKETS[layerOf(nm)] || BUCKETS.furniture).push(o);
     }
@@ -1241,17 +1322,38 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   FLOOR_Y = box.min.y;
   scene.fog = new THREE.Fog(SKY, radius*5, radius*18);
 
-  // Real point lights at every glowing fixture, so lamps actually cast light
-  // pools. Capped + shadowless to stay smooth on modest hardware.
-  const LAMP_CAP = 40;
-  const lamps = BUCKETS.lights.slice(0, LAMP_CAP);
-  for(const o of lamps){
+  // Real lights at every glowing fixture, capped + shadowless to stay smooth
+  // on modest hardware. Downlights/pendants get SpotLights aimed DOWN (the
+  // signature light pools on the floor). Sconces/floor_lamps stay omni.
+  const LAMP_CAP = 36;
+  for(const o of BUCKETS.lights.slice(0, LAMP_CAP)){
     const p = new THREE.Vector3(); o.getWorldPosition(p);
-    const L = new THREE.PointLight(0xffe7c0, radius*0.5, radius*1.4, 2.0);
-    L.position.copy(p); scene.add(L);
+    const nm = (o.userData && o.userData.fixtureKind) ||
+               (o.parent && o.parent.userData && o.parent.userData.fixtureKind) || '';
+    // heuristic: a fixture near the ceiling acts as a downlight
+    const downlight = p.y > FLOOR_Y + 2.2;
+    if(downlight){
+      // narrow cone aimed at the floor produces a crisp light disc — the
+      // signature of arch-viz downlights. Offset slightly below the fixture
+      // so the cone isn't blocked by the ceiling slab itself.
+      const S = new THREE.SpotLight(0xffd9a0, 8.0, 6.0,
+                                    Math.PI*0.22, 0.35, 1.6);
+      S.position.set(p.x, p.y - 0.08, p.z);
+      S.target.position.set(p.x, FLOOR_Y, p.z);
+      scene.add(S); scene.add(S.target);
+    } else {
+      const L = new THREE.PointLight(0xffe7c0, 0.7, radius*0.9, 2.0);
+      L.position.copy(p); scene.add(L);
+    }
   }
   if(BUCKETS.lights.length > LAMP_CAP)
     console.log('plan-to-3d: '+BUCKETS.lights.length+' fixtures, lit '+LAMP_CAP+' (perf cap)');
+
+  // Entourage figures
+  for(const p of PEOPLE){
+    const spr = makePerson(p.x, p.z, p.h);
+    scene.add(spr); BUCKETS.people = BUCKETS.people || []; BUCKETS.people.push(spr);
+  }
 
   for(const l of LABELS){
     const div = document.createElement('div');
@@ -1264,7 +1366,7 @@ loader.parse(b64ToArrayBuffer(GLB_B64), '', (gltf) => {
   // wire the layer checkboxes; hide rows whose layer is empty for this model
   const ROWS=[['roof','roof'],['ceiling','ceiling'],['walls','walls'],
     ['glass','glass'],['floor','floor'],['furniture','furniture'],
-    ['lights','lights'],['labels','labels']];
+    ['lights','lights'],['people','people'],['labels','labels']];
   for(const [id,cat] of ROWS){
     const el=document.getElementById('ck-'+id);
     if(!el) continue;
@@ -1292,13 +1394,14 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   labelRenderer.setSize(innerWidth, innerHeight);
+  if(composer) composer.setSize(innerWidth, innerHeight);
 });
 
 (function animate(){
   requestAnimationFrame(animate);
   applyMove();
   controls.update();
-  renderer.render(scene, camera);
+  if(composer) composer.render(); else renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
 })();
 </script>
@@ -1307,14 +1410,26 @@ addEventListener('resize', () => {
 """
 
 
-def write_viewer(glb_bytes, rooms, title):
+def write_viewer(glb_bytes, rooms, title, people=None):
     b64 = base64.b64encode(glb_bytes).decode("ascii")
     labels = json.dumps(rooms, ensure_ascii=False)
+    people_json = json.dumps(people or [], ensure_ascii=False)
     html = (VIEWER_TEMPLATE
             .replace("__TITLE__", title)
             .replace("__GLB_B64__", b64)
-            .replace("__LABELS__", labels))
+            .replace("__LABELS__", labels)
+            .replace("__PEOPLE__", people_json))
     return html
+
+
+def collect_people(spec):
+    """Entourage figures: spec['people'] = [{at:[x,y], height?}] -> world coords."""
+    out = []
+    for p in spec.get("people", []):
+        at = p.get("at", [0, 0])
+        out.append({"x": float(at[0]), "z": float(at[1]),
+                    "h": float(p.get("height", 1.7))})
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1413,7 +1528,7 @@ def main():
 
     viewer_path = os.path.join(args.out, "viewer.html")
     with open(viewer_path, "w", encoding="utf-8") as f:
-        f.write(write_viewer(glb, rooms, title))
+        f.write(write_viewer(glb, rooms, title, collect_people(spec)))
 
     tri = sum(len(mesh.groups[m]["indices"]) // 3 for m in MATERIALS)
     print("model:   %s (%d bytes)" % (glb_path, len(glb)))
