@@ -56,17 +56,17 @@
 
     {
       "name":       "Chambre 2",
-      "dimensions": "smaller bedroom, 3.01 × 3.32 m extended, 12.4 m², 2.6 m ceiling",
-      "layout":     "one window on the west wall, door on the east wall opening to the hall, north wall shared with chambre 1, south wall against the shower room",
-      "placement":  "single bed along the south wall with headboard against the south wall, slim wardrobe along the west wall under/beside the window, small nightstand at the foot of the bed",
-      "viewpoint":  "view from the north-east corner near the door, looking south-west — the single bed is along the right wall, the window on the far wall",
-      "floor":      "european white-oak engineered planks",
-      "walls":      "linen-textured wallcovering in ivory",
-      "ceiling":    "matte white, single small Akari pendant centred",
-      "lighting":   "single Akari pendant, soft west-facing daylight from the single window",
-      "furniture":  "slim single bed with bouclé headboard and pale oak frame, narrow nightstand with a stone-base lamp, slim wardrobe along the west wall, small writing desk with a Wegner CH24 chair",
-      "colors":     "ivory and warm woods, accent in deep navy throw on the bed",
-      "extra":      "a few books stacked on the nightstand, a small monstera plant in the corner"
+      "dimensions": "small guest bedroom, 3.01 × 3.32 m, 12.4 m², 2.6 m ceiling",
+      "layout":     "one tall window on the west wall facing the bed, door on the east wall",
+      "placement":  "ONE single platform bed centred against the back wall, headboard flat against the back wall, ONE small nightstand to the LEFT of the bed only, ONE full-height wardrobe set flush into the side wall — that is all the furniture. Deliberately sparse, this is a quiet guest room, no desk, no chair, no second piece of seating",
+      "viewpoint":  "view from the doorway looking straight at the back wall — the single bed is centred mid-frame against the back wall, the window is on the left of the bed with sheer linen curtain catching soft daylight",
+      "floor":      "european white-oak engineered planks running away from camera",
+      "walls":      "warm white limewash hand-troweled, with a slim vertical raw-oak panel behind the headboard as a feature",
+      "ceiling":    "matte white plaster with one small flush ceiling lantern",
+      "lighting":   "single ceiling lantern, soft west daylight diffused by a sheer linen curtain",
+      "furniture":  "ONE single platform bed in pale solid oak, low ~35 cm tall, simple flat low headboard in matching oak, tailored white linen bedding with a single navy-blue wool throw folded across the foot — ONE small oak nightstand 40 cm wide with one stoneware lamp on top — NO chair, NO desk, NO second bed",
+      "colors":     "warm white walls, raw oak, navy accent on the throw",
+      "extra":      "a small framed minimalist line drawing above the headboard, a single monstera plant in a stoneware pot near the window, a wool rug under the bed"
     },
 
     {
