@@ -1,0 +1,85 @@
+{
+  "project": "Apartment 2BR — Japandi",
+
+  "global": {
+    "style":      "japandi",
+    "atmosphere": "warm",
+    "view":       "wide_corner",
+    "tech":       "architectural photography, magazine quality (Dezeen, AD), ultra-photoreal, global illumination, soft contact shadows, perfectly straight verticals, kodak portra 400 film grain"
+  },
+
+  "rooms": [
+    {
+      "name":      "Séjour",
+      "floor":     "smoked oak chevron parquet",
+      "walls":     "lime plaster, hand-troweled, warm white",
+      "ceiling":   "matte white plaster, recessed plaster-in downlights",
+      "lighting":  "Isamu Noguchi Akari paper lantern pendant over coffee table, linear cove LED 2700K, late golden-hour sun through floor-to-ceiling window",
+      "furniture": "low-slung modular bouclé sofa in ivory, Noguchi walnut coffee table, ceramic table lamp on travertine side table, dining area with Saarinen Tulip table + 4 wishbone CH24 chairs",
+      "colors":    "Farrow & Ball Cornforth White walls, accents in terracotta brûlée and dried-olive green",
+      "extra":     "large abstract canvas in muted blues on the back wall, dried branch in monumental stone pot, soft wool rug, two open books on the coffee table"
+    },
+
+    {
+      "name":      "Chambre 1",
+      "floor":     "european white-oak engineered planks, matte oil finish",
+      "walls":     "fluted oak panelling behind the bed, lime plaster on remaining walls",
+      "lighting":  "twin Articolo Float pendants over the nightstands (alabaster), soft morning sun raking across the bed",
+      "furniture": "low platform double bed in oak, linen bedding in oat milk and stone grey, two slim nightstands with brass pulls, large wardrobe with reeded oak doors along the back wall",
+      "colors":    "warm off-white with woody undertones, accent in deep forest green throw",
+      "extra":     "small framed print on the wall, an indoor fig tree in a terracotta pot, vintage Persian rug under the bed"
+    },
+
+    {
+      "name":      "Salle de bain",
+      "floor":     "honed travertine large-format tiles",
+      "walls":     "tadelakt microcement in warm putty, mirror wall above the vanity",
+      "lighting":  "alabaster wall sconces flanking the mirror, soft diffused daylight from a frosted window above the bathtub",
+      "furniture": "monolithic stone bathtub hand-carved, wall-hung porcelain wash basin, brushed-brass tapware (Vola), wall-hung WC with concealed cistern",
+      "colors":    "stone, putty, brass, lots of warm neutrals",
+      "extra":     "rolled linen towels stacked on a teak stool, single olive branch in a slim ceramic vase"
+    },
+
+    {
+      "name":      "Chambre 2",
+      "floor":     "european white-oak engineered planks",
+      "walls":     "linen-textured wallcovering in ivory",
+      "lighting":  "single Akari pendant centered, soft natural daylight from a small window",
+      "furniture": "single bed with a slim wood frame and bouclé headboard, narrow nightstand with a stone-base lamp, slim wardrobe along the side wall, small desk with a Wegner CH24 chair",
+      "colors":    "ivory, warm woods, accent in deep navy throw",
+      "extra":     "a few books stacked on the nightstand, a small monstera plant in the corner"
+    },
+
+    {
+      "name":      "Cuisine",
+      "floor":     "matte porcelain stoneware, 80×80, taupe",
+      "walls":     "handle-less matte lacquer cabinetry in sage green, full-height stone backsplash (taj mahal quartzite, honed)",
+      "ceiling":   "matte white with recessed downlights and a single linear pendant over the worktop",
+      "lighting":  "single tube pendant over the worktop, downlights, soft morning light from the side",
+      "furniture": "monolithic stone island with waterfall edge, integrated stainless steel sink, La Cornue range, full-height oak veneer pantry",
+      "colors":    "sage green, taupe stone, warm oak, brass tapware",
+      "extra":     "a bowl of lemons on the island, fresh herbs in small ceramic pots on the window ledge, single bar stool in oak"
+    },
+
+    {
+      "name":      "Salle d'eau",
+      "floor":     "honed travertine tiles",
+      "walls":     "tadelakt microcement, ochre tone",
+      "lighting":  "single alabaster wall sconce, soft warm 2700K",
+      "furniture": "frameless walk-in shower with rain head, slim wall-hung porcelain basin, brushed-brass tapware",
+      "colors":    "ochre, warm stone, brass",
+      "extra":     "single linen hand-towel on a brass hook"
+    },
+
+    {
+      "name":      "Hall",
+      "floor":     "smoked oak chevron parquet",
+      "walls":     "warm white limewash",
+      "lighting":  "linear cove LED 2700K hidden in plaster reveal at the ceiling line, single wall sconce",
+      "furniture": "slim oak console with a stone bowl for keys, a tall mirror, simple wood bench",
+      "colors":    "warm neutrals, oak and stone",
+      "extra":     "framed abstract print on the wall, small dried floral arrangement in a stone vase",
+      "view":      "axial_one_point"
+    }
+  ]
+}

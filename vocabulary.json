@@ -1,0 +1,172 @@
+{
+  "_doc": "Architectural / interior-design vocabulary used to compose photoreal prompts. Hand-curated. Pick from these in your spec, or write your own — anything goes; this is a starting palette.",
+
+  "styles": {
+    "japandi":             "japandi, scandinavian-japanese fusion, warm minimalism, soft palette",
+    "scandi":              "scandinavian minimalism, light woods, calm white palette, hygge",
+    "wabi_sabi":           "wabi-sabi, imperfect beauty, raw materials, earthy patina",
+    "biophilic":           "biophilic design, abundant plants, natural light, organic textures, living wall",
+    "mid_century_modern":  "mid-century modern, walnut wood, brass accents, atomic-era curves",
+    "contemporary_minimal":"contemporary minimalism, clean lines, monochromatic palette, ample negative space",
+    "brutalist":           "brutalist, raw concrete, exposed structure, monolithic forms",
+    "industrial_loft":     "industrial loft, exposed brick, black steel beams, oversized factory windows",
+    "art_deco":            "art deco, geometric patterns, brass and marble, velvet textures, sunburst motifs",
+    "mediterranean":       "mediterranean, plaster walls, terracotta tile, olive wood, arched openings",
+    "boho":                "bohemian, layered rugs, rattan, jute, eclectic textiles, plants",
+    "luxe_modern":         "luxury modern, book-matched marble, brushed brass, mohair velvet, large-format porcelain"
+  },
+
+  "materials": {
+    "floors": [
+      "european white-oak engineered planks, matte oil finish",
+      "smoked oak chevron parquet",
+      "polished travertine large-format tiles",
+      "honed carrara marble 60×60",
+      "venetian terrazzo with brass dividers",
+      "polished concrete with hexagonal saw-cuts",
+      "matte porcelain stoneware, 80×80, taupe",
+      "encaustic cement tiles, geometric pattern",
+      "limewashed wide pine boards",
+      "bleached walnut herringbone"
+    ],
+    "walls": [
+      "lime plaster, hand-troweled, warm white",
+      "tadelakt, polished microcement, ochre",
+      "fluted oak panelling, vertical reeded",
+      "book-matched calacatta marble slab",
+      "white limewash with subtle cloud variation",
+      "dark stained walnut veneer, vertical grain",
+      "raw cast-in-place concrete, matrix board imprint",
+      "ribbed plaster panel, soft shadow grooves",
+      "linen-textured wallcovering, ivory",
+      "exposed brick, painted matte white"
+    ],
+    "counters_worktops": [
+      "honed quartzite, taj mahal",
+      "calacatta gold marble waterfall edge",
+      "soapstone, dark satin, hand-rubbed",
+      "polished concrete countertop",
+      "single-slab travertine, leathered finish",
+      "stainless steel, brushed, marine-grade"
+    ],
+    "metals": [
+      "brushed unlacquered brass",
+      "blackened steel, matte powder coat",
+      "polished nickel",
+      "patinated bronze, hand-applied",
+      "champagne anodized aluminium"
+    ]
+  },
+
+  "lighting": {
+    "fixtures": [
+      "Isamu Noguchi Akari paper lantern pendant",
+      "Flos IC suspension, opal glass globe",
+      "Vibia Wireflow chandelier, linear LED",
+      "Roll & Hill Modo, brass arms with milk-glass orbs",
+      "Articolo Float pendant, alabaster",
+      "Apparatus Trapeze chandelier, blackened brass",
+      "recessed plaster-in trim downlights, miniature aperture",
+      "linear cove LED 2700K, hidden in plaster reveal",
+      "wall-washer track, low-glare warm white",
+      "alabaster wall sconces flanking a fireplace",
+      "table lamp with pleated linen shade, ceramic base"
+    ],
+    "qualities": [
+      "soft natural daylight, golden hour, long shadows",
+      "directional sunlight through floor-to-ceiling windows",
+      "diffused overcast daylight",
+      "warm 2700K interior lighting, layered ambient + task + accent",
+      "dramatic chiaroscuro with single accent spot",
+      "blue-hour twilight with interior lights glowing",
+      "soft north-facing daylight, museum-grade"
+    ]
+  },
+
+  "furniture": {
+    "seating": [
+      "Camaleonda modular sofa by Mario Bellini, bouclé ivory",
+      "USM Haller storage in matte white",
+      "Hans Wegner CH25 lounge chair, oak and paper cord",
+      "Charlotte Perriand LC4 chaise longue",
+      "B&B Italia Tufty-Time sofa",
+      "Carl Hansen wishbone chair (CH24), soaped oak",
+      "Pierre Jeanneret office chair, teak and cane",
+      "low-slung Japanese floor sofa with linen slipcover"
+    ],
+    "tables": [
+      "Isamu Noguchi coffee table, walnut and glass",
+      "Saarinen Tulip dining table, marble top",
+      "live-edge solid walnut slab table",
+      "Mater Bowl side table, matte black",
+      "travertine plinth coffee table",
+      "burl-wood pedestal side table"
+    ],
+    "storage": [
+      "USM Haller modular sideboard, matte white",
+      "fluted oak built-in millwork with brass pulls",
+      "Vitsoe 606 wall-mounted shelving",
+      "minimalist wall-hung console, oak"
+    ],
+    "kitchen": [
+      "handle-less matte lacquer cabinetry, sage green",
+      "floor-to-ceiling oak veneer pantry",
+      "stainless-steel professional range, La Cornue",
+      "monolithic stone island with waterfall edge",
+      "Bulthaup b3 kitchen, brushed steel"
+    ],
+    "bathroom": [
+      "freestanding cast-iron clawfoot tub",
+      "monolithic stone bathtub, hand-carved",
+      "wall-hung porcelain wash basin",
+      "vola brushed-brass tapware",
+      "frameless walk-in shower with rain head",
+      "fluted glass shower screen"
+    ]
+  },
+
+  "colors": {
+    "neutrals": [
+      "Farrow & Ball Cornforth White",
+      "Farrow & Ball Dimpse",
+      "Benjamin Moore White Dove",
+      "putty, mushroom, oat milk, bone, parchment",
+      "warm off-white limewash"
+    ],
+    "accents": [
+      "terracotta brûlée",
+      "burnt sienna textile",
+      "deep forest green velvet",
+      "Yves Klein blue accent",
+      "ochre, mustard, saffron",
+      "smoky teal lacquer",
+      "blackened bronze hardware"
+    ]
+  },
+
+  "atmospheres": {
+    "serene":     "calm, meditative, museum-quiet",
+    "warm":       "intimate, golden, candlelit warmth",
+    "airy":       "bright, breezy, light-filled",
+    "moody":      "low-key, atmospheric, cinematic shadow",
+    "fresh":      "crisp morning light, just-cleaned",
+    "lived_in":   "softly worn, books and personal objects, lived in"
+  },
+
+  "camera_views": {
+    "wide_corner":   "wide-angle 24mm corner shot, eye-level (~1.6 m), straight verticals (architectural correction)",
+    "intimate_35mm": "35mm prime, eye-level, shallow depth of field on hero object, room receding softly",
+    "low_hero":      "low 28mm hero shot looking up slightly, dramatic ceiling lines",
+    "axial_one_point":"one-point perspective from doorway, perfect axial composition",
+    "human_85mm":    "85mm portrait-style intimate vignette of a furniture group"
+  },
+
+  "tech_quality": [
+    "architectural interior photography",
+    "magazine quality (Dezeen, Architectural Digest, Wallpaper*)",
+    "ultra-photoreal, octane-rendered, 8k",
+    "perfectly straight verticals, tilt-shift correction",
+    "subtle film grain, kodak portra 400",
+    "global illumination, soft contact shadows, no flare"
+  ]
+}
