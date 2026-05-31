@@ -125,9 +125,8 @@ def build_prompt(room, glb):
     return ", ".join(p for p in parts if p)
 
 
-def fetch_image(prompt, width, height, model, seed, retries=3):
-    """Call Pollinations and download the PNG. The service is anonymous and
-    free; we retry a few times on transient errors."""
+def fetch_pollinations(prompt, width, height, model, seed, timeout=90):
+    """Free anonymous FLUX endpoint. Returns PNG bytes or raises."""
     qs = urllib.parse.urlencode({
         "model": model,
         "width": width, "height": height,
@@ -137,18 +136,111 @@ def fetch_image(prompt, width, height, model, seed, retries=3):
     })
     encoded = urllib.parse.quote(prompt, safe="")
     url = f"https://image.pollinations.ai/prompt/{encoded}?{qs}"
+    req = urllib.request.Request(url,
+        headers={"User-Agent": "plan-to-image/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def _cf_creds():
+    """Return (account_id, token) for Cloudflare Workers AI. Prefers env vars,
+    then falls back to wrangler's stored OAuth token (auto-refreshed by
+    `wrangler login`). Returns (None, None) if nothing is configured."""
+    acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+    tok  = os.environ.get("CLOUDFLARE_API_TOKEN")
+    if acct and tok:
+        return acct, tok
+    # Fallback: read wrangler's stored oauth_token
+    cfg_path = os.path.expanduser("~/.wrangler/config/default.toml")
+    if not tok and os.path.exists(cfg_path):
+        for line in open(cfg_path, "r", encoding="utf-8"):
+            if line.strip().startswith("oauth_token"):
+                tok = line.split('"')[1]
+                break
+    # Fallback: account id from `wrangler whoami`
+    if not acct:
+        try:
+            import subprocess
+            out = subprocess.check_output(["wrangler", "whoami"],
+                stderr=subprocess.DEVNULL, timeout=8).decode("utf-8", "ignore")
+            for line in out.split("\n"):
+                for token in line.split():
+                    t = token.strip().strip("│").strip()
+                    if len(t) == 32 and all(c in "0123456789abcdef" for c in t.lower()):
+                        acct = t; break
+                if acct: break
+        except Exception:  # noqa: BLE001
+            pass
+    return acct, tok
+
+
+def fetch_cloudflare(prompt, width, height, model, seed, timeout=120):
+    """Cloudflare Workers AI FLUX. Free tier ~50–100 images/day. Auto-reads
+    creds from env vars OR `wrangler` OAuth state (run `wrangler login` once)."""
+    import base64
+    acct, tok = _cf_creds()
+    if not acct or not tok:
+        raise RuntimeError("CF creds missing — run `wrangler login` once, or "
+                           "set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN")
+    cf_model = ("@cf/black-forest-labs/flux-1-schnell"
+                if model in ("flux", "flux-schnell", "schnell")
+                else f"@cf/{model}")
+    url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/{cf_model}"
+    body = json.dumps({
+        "prompt":    prompt,
+        "width":     min(width, 2048),
+        "height":    min(height, 2048),
+        "seed":      int(seed),
+        "num_steps": 8,
+    }).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Authorization": f"Bearer {tok}",
+        "Content-Type":  "application/json",
+        "User-Agent":    "plan-to-image/1.0",
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        payload = json.loads(r.read())
+    if not payload.get("success"):
+        raise RuntimeError(f"Cloudflare returned: {payload}")
+    return base64.b64decode(payload["result"]["image"])
+
+
+def fetch_image(prompt, width, height, model, seed, retries=3, provider="auto"):
+    """Provider routing:
+      - "auto"        : Pollinations primary, Cloudflare fallback (default)
+      - "pollinations": only Pollinations
+      - "cloudflare"  : only Cloudflare Workers AI
+    """
+    cf_acct, cf_tok = _cf_creds()
+    cf_ready = bool(cf_acct and cf_tok)
+
+    if provider == "cloudflare":
+        if not cf_ready:
+            raise RuntimeError("--provider cloudflare requires creds (run "
+                               "`wrangler login` once)")
+        return fetch_cloudflare(prompt, width, height, model, seed)
+
     last = None
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(url,
-                headers={"User-Agent": "plan-to-image/1.0"})
-            with urllib.request.urlopen(req, timeout=90) as r:
-                return r.read()
+            return fetch_pollinations(prompt, width, height, model, seed)
         except Exception as e:  # noqa: BLE001
             last = e
-            print(f"  attempt {attempt+1}/{retries} failed: {e}")
+            print(f"  Pollinations attempt {attempt+1}/{retries} failed: {e}")
             time.sleep(2 * (attempt + 1))
-    raise RuntimeError(f"Pollinations fetch failed after {retries}: {last}")
+
+    if provider == "pollinations":
+        raise RuntimeError(f"Pollinations failed after {retries}: {last}")
+    if cf_ready:
+        print("  → falling back to Cloudflare Workers AI FLUX schnell")
+        try:
+            return fetch_cloudflare(prompt, width, height, model, seed)
+        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(
+                f"Both providers failed. Pollinations: {last}; Cloudflare: {e}")
+    raise RuntimeError(f"Pollinations failed after {retries}: {last}. "
+                       f"Run `wrangler login` to enable the Cloudflare "
+                       f"fallback (free tier).")
 
 
 GALLERY_HTML = """<!DOCTYPE html>
@@ -202,6 +294,9 @@ def main():
     ap.add_argument("--only", default=None,
                     help="only generate rooms whose name matches (substring, "
                          "case-insensitive)")
+    ap.add_argument("--provider", default="auto",
+                    choices=["auto", "pollinations", "cloudflare"],
+                    help="auto=Pollinations + CF fallback (default)")
     args = ap.parse_args()
 
     spec = json.load(open(args.spec, "r", encoding="utf-8"))
@@ -226,7 +321,7 @@ def main():
         print("  prompt:", prompt[:140] + ("…" if len(prompt) > 140 else ""))
         print(f"  -> {png_path}")
         data = fetch_image(prompt, args.width, args.height, args.model,
-                           args.seed)
+                           args.seed, provider=args.provider)
         with open(png_path, "wb") as f:
             f.write(data)
         cards.append(CARD.format(name=name, file=png_name, prompt=prompt))
