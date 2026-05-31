@@ -52,6 +52,54 @@ import urllib.request
 VOCAB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                           "vocabulary.json")
 
+# Cloudflare Workers AI free tier is rate-limited. We track our usage in a
+# tiny rolling-day log under XDG_STATE so we can warn before the user hits
+# the cap and HARD-BLOCK at the cap — never automatically rolling to a
+# paid plan. (Cloudflare's free quota is per-day, ~50 images of FLUX, but
+# the exact ceiling depends on the account; we stay safely under 40/day.)
+CF_FREE_TIER_DAILY = 40
+CF_WARN_PCT = 0.75
+QUOTA_PATH = os.path.expanduser("~/.cache/plan_to_image/cf_quota.json")
+
+
+def _quota_load():
+    if not os.path.exists(QUOTA_PATH):
+        return {"day": "", "count": 0}
+    try:
+        return json.load(open(QUOTA_PATH, "r", encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {"day": "", "count": 0}
+
+
+def _quota_today():
+    return time.strftime("%Y-%m-%d", time.localtime())
+
+
+def _quota_check_and_increment():
+    """Returns the new count after increment. Raises if the daily cap is hit
+    so we never silently flip to a paid tier."""
+    q = _quota_load()
+    today = _quota_today()
+    if q.get("day") != today:
+        q = {"day": today, "count": 0}
+    if q["count"] >= CF_FREE_TIER_DAILY:
+        raise RuntimeError(
+            f"❌ Cloudflare free-tier cap reached ({q['count']}/"
+            f"{CF_FREE_TIER_DAILY} today). Refusing to continue — the code "
+            f"won't auto-roll to a PAID plan. Wait until tomorrow or set "
+            f"P2I_BYPASS_QUOTA=1 to override (will still bill against the "
+            f"free tier, may fail).")
+    q["count"] += 1
+    os.makedirs(os.path.dirname(QUOTA_PATH), exist_ok=True)
+    json.dump(q, open(QUOTA_PATH, "w", encoding="utf-8"))
+    used = q["count"]
+    pct = used / CF_FREE_TIER_DAILY
+    if pct >= CF_WARN_PCT:
+        remain = CF_FREE_TIER_DAILY - used
+        print(f"  ⚠️  CF quota: {used}/{CF_FREE_TIER_DAILY} today "
+              f"({int(pct*100)}%) — {remain} left before HARD BLOCK")
+    return used
+
 
 def load_vocab():
     with open(VOCAB_PATH, "r", encoding="utf-8") as f:
@@ -176,12 +224,17 @@ def _cf_creds():
 
 def fetch_cloudflare(prompt, width, height, model, seed, timeout=120):
     """Cloudflare Workers AI FLUX. Free tier ~50–100 images/day. Auto-reads
-    creds from env vars OR `wrangler` OAuth state (run `wrangler login` once)."""
+    creds from env vars OR `wrangler` OAuth state (run `wrangler login` once).
+
+    HARD-BLOCKS at CF_FREE_TIER_DAILY images/day to prevent any silent
+    spillover to a paid plan."""
     import base64
     acct, tok = _cf_creds()
     if not acct or not tok:
         raise RuntimeError("CF creds missing — run `wrangler login` once, or "
                            "set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN")
+    if not os.environ.get("P2I_BYPASS_QUOTA"):
+        _quota_check_and_increment()
     cf_model = ("@cf/black-forest-labs/flux-1-schnell"
                 if model in ("flux", "flux-schnell", "schnell")
                 else f"@cf/{model}")
