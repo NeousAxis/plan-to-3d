@@ -69,27 +69,54 @@ def resolve(value, vocab_section):
 
 
 def build_prompt(room, glb):
-    """Compose one photoreal archviz prompt for a single room."""
+    """Compose one photoreal archviz prompt for a single room.
+
+    The plan-derived geometry (dimensions, layout, viewpoint, furniture
+    placement) comes FIRST in the prompt so FLUX latches on to the spatial
+    constraints — the style/material vocabulary then fills in the look.
+    """
     v = load_vocab()
     style = resolve(room.get("style") or glb.get("style"), v["styles"])
     atmos = resolve(room.get("atmosphere") or glb.get("atmosphere"),
                     v["atmospheres"])
     view  = resolve(room.get("view") or glb.get("view") or "wide_corner",
                     v["camera_views"])
+    name = room.get("name", "room")
 
     parts = []
-    parts.append(f"professional interior photography of a {room.get('name','room').lower()}")
-    if style:        parts.append(style)
-    if room.get("floor"):     parts.append(f"floor: {room['floor']}")
-    if room.get("walls"):     parts.append(f"walls: {room['walls']}")
+    # ── Plan-derived geometry FIRST (FLUX weights the front of the prompt
+    #    most). This is what makes the render match the user's actual plan,
+    #    not a generic Pinterest japandi shot.
+    parts.append(f"interior architectural photograph of {name.lower()}")
+    if room.get("dimensions"):
+        # e.g. "rectangular, 5.36 × 3.72 m, 19.7 m²"
+        parts.append(f"room dimensions: {room['dimensions']}")
+    if room.get("layout"):
+        # e.g. "window on the north wall, door on the south wall, wood-clad east wall"
+        parts.append(f"layout: {room['layout']}")
+    if room.get("placement"):
+        # e.g. "double bed centred against the north wall headboard north,
+        # wardrobe full-length along the west wall, nightstand left of bed"
+        parts.append(f"furniture placement: {room['placement']}")
+    if room.get("viewpoint"):
+        # e.g. "view from the south-west corner looking north-east towards the window"
+        parts.append(f"camera viewpoint: {room['viewpoint']}")
+
+    # ── Then the design vocabulary
+    if style:                 parts.append(style)
+    if room.get("floor"):     parts.append(f"floor finish: {room['floor']}")
+    if room.get("walls"):     parts.append(f"wall finish: {room['walls']}")
     if room.get("ceiling"):   parts.append(f"ceiling: {room['ceiling']}")
     if room.get("lighting"):  parts.append(f"lighting: {room['lighting']}")
-    if room.get("furniture"): parts.append(f"furniture: {room['furniture']}")
+    if room.get("furniture"): parts.append(f"furniture pieces: {room['furniture']}")
     if room.get("colors"):    parts.append(f"palette: {room['colors']}")
-    if atmos:        parts.append(atmos)
+    if atmos:                 parts.append(atmos)
     if room.get("extra"):     parts.append(room["extra"])
-    if view:         parts.append(view)
-    # Always-on tech sauce
+    if view and not room.get("viewpoint"):
+        # use the abstract view preset only if no concrete viewpoint was given
+        parts.append(view)
+
+    # ── Always-on tech sauce
     tech = room.get("tech") or glb.get("tech") or \
         "architectural photography, magazine quality, ultra-photoreal, " \
         "global illumination, soft contact shadows, perfectly straight verticals"

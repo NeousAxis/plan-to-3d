@@ -1,85 +1,132 @@
 {
   "project": "Apartment 2BR — Japandi",
+  "_plan_source": "User-supplied floor plan, 14.26 × 7.04 m envelope, 8 rooms with printed dimensions. Each room below carries the actual measurements + opening layout + furniture placement read off the plan, plus a viewpoint chosen to show the room as the plan dictates.",
 
   "global": {
     "style":      "japandi",
     "atmosphere": "warm",
-    "view":       "wide_corner",
-    "tech":       "architectural photography, magazine quality (Dezeen, AD), ultra-photoreal, global illumination, soft contact shadows, perfectly straight verticals, kodak portra 400 film grain"
+    "tech":       "architectural interior photography, magazine quality (Dezeen, AD, Wallpaper*), ultra-photoreal, global illumination, soft natural contact shadows, perfectly straight verticals, kodak portra 400 grain, no fisheye"
   },
 
   "rooms": [
     {
-      "name":      "Séjour",
-      "floor":     "smoked oak chevron parquet",
-      "walls":     "lime plaster, hand-troweled, warm white",
-      "ceiling":   "matte white plaster, recessed plaster-in downlights",
-      "lighting":  "Isamu Noguchi Akari paper lantern pendant over coffee table, linear cove LED 2700K, late golden-hour sun through floor-to-ceiling window",
-      "furniture": "low-slung modular bouclé sofa in ivory, Noguchi walnut coffee table, ceramic table lamp on travertine side table, dining area with Saarinen Tulip table + 4 wishbone CH24 chairs",
-      "colors":    "Farrow & Ball Cornforth White walls, accents in terracotta brûlée and dried-olive green",
-      "extra":     "large abstract canvas in muted blues on the back wall, dried branch in monumental stone pot, soft wool rug, two open books on the coffee table"
+      "name":       "Séjour",
+      "dimensions": "rectangular, 6.50 × 4.30 m, 27.95 m² (large), 2.6 m ceiling",
+      "layout":     "two large windows on the north wall, one window on the east wall, double-door opening on the west wall leading to the hall, no openings on the south wall",
+      "placement":  "L-shaped low sofa group in the centre facing the north windows, walnut coffee table on a wool rug in front, dining table with 4 chairs along the east wall, slim console along the south wall under a large abstract canvas, tall potted olive tree in the north-west corner near the windows",
+      "viewpoint":  "view from the south-west corner standing in the doorway, looking north-east diagonally across the room — the sofa group is in mid-ground, the dining area visible at the right, the windows pour daylight from the back-left",
+      "floor":      "smoked oak chevron parquet",
+      "walls":      "lime plaster, hand-troweled, warm white",
+      "ceiling":    "matte white plaster, recessed plaster-in downlights on a 2 m grid",
+      "lighting":   "Isamu Noguchi Akari paper-lantern pendant over the coffee table, linear cove LED 2700K along the ceiling/wall junction, late golden-hour sunlight raking across the floor",
+      "furniture":  "low-slung modular bouclé sofa in ivory, Noguchi walnut coffee table, Saarinen Tulip dining table in white marble with 4 oak wishbone CH24 chairs, slim oak console",
+      "colors":     "Farrow & Ball Cornforth White walls, accent in terracotta brûlée throw and dried-olive green",
+      "extra":      "single large abstract canvas in muted blues on the south wall, dried branches in a monumental stone vessel, two open books on the coffee table"
     },
 
     {
-      "name":      "Chambre 1",
-      "floor":     "european white-oak engineered planks, matte oil finish",
-      "walls":     "fluted oak panelling behind the bed, lime plaster on remaining walls",
-      "lighting":  "twin Articolo Float pendants over the nightstands (alabaster), soft morning sun raking across the bed",
-      "furniture": "low platform double bed in oak, linen bedding in oat milk and stone grey, two slim nightstands with brass pulls, large wardrobe with reeded oak doors along the back wall",
-      "colors":    "warm off-white with woody undertones, accent in deep forest green throw",
-      "extra":     "small framed print on the wall, an indoor fig tree in a terracotta pot, vintage Persian rug under the bed"
+      "name":       "Chambre 1",
+      "dimensions": "rectangular, 5.36 × 3.72 m, 19.7 m², 2.6 m ceiling",
+      "layout":     "two windows on the north wall flooding the room with morning light, door on the east wall leading to the bathroom, door on the south wall to the hall, west wall is full-length built-in wardrobe",
+      "placement":  "double platform bed centred against the south wall with headboard facing north towards the windows, two slim nightstands flanking, full-height fluted oak wardrobe across the entire west wall, no other furniture (bedroom is intentionally quiet)",
+      "viewpoint":  "view from the south-east corner near the bathroom door, looking north-west across the bed towards the two north windows and the wardrobe wall on the right",
+      "floor":      "european white-oak engineered planks, matte oil finish, running east–west",
+      "walls":      "lime plaster warm white on three walls, fluted oak panelling on the wardrobe (west) wall",
+      "ceiling":    "matte white, single inset cove LED above the bed headboard",
+      "lighting":   "twin Articolo Float pendants in alabaster hanging low over each nightstand, soft north-side morning daylight raking across the bedding",
+      "furniture":  "low oak platform double bed, linen bedding in oat milk + stone grey + deep-forest-green throw, two slim oak nightstands with brass pulls, full-length built-in wardrobe in fluted oak",
+      "colors":     "warm off-white with woody undertones, forest-green accent",
+      "extra":      "small framed sumi-e ink print above the headboard, an indoor fig tree in a terracotta pot at the foot of the bed, vintage muted Persian rug under the bed"
     },
 
     {
-      "name":      "Salle de bain",
-      "floor":     "honed travertine large-format tiles",
-      "walls":     "tadelakt microcement in warm putty, mirror wall above the vanity",
-      "lighting":  "alabaster wall sconces flanking the mirror, soft diffused daylight from a frosted window above the bathtub",
-      "furniture": "monolithic stone bathtub hand-carved, wall-hung porcelain wash basin, brushed-brass tapware (Vola), wall-hung WC with concealed cistern",
-      "colors":    "stone, putty, brass, lots of warm neutrals",
-      "extra":     "rolled linen towels stacked on a teak stool, single olive branch in a slim ceramic vase"
+      "name":       "Salle de bain",
+      "dimensions": "rectangular, 2.40 × 2.38 m, 5.71 m², 2.6 m ceiling",
+      "layout":     "small frosted window high on the north wall above the bathtub, door on the south wall connecting to chambre 1, no other openings",
+      "placement":  "freestanding bathtub along the full length of the north wall under the window, wall-hung porcelain washbasin on the west wall, wall-hung WC on the east wall, mirror above the basin",
+      "viewpoint":  "view from the south-east corner standing in the doorway, looking north-west — the bathtub fills the back of the frame under soft daylight from the high window, the basin is on the left",
+      "floor":      "honed travertine large-format tiles, 60×60, warm putty",
+      "walls":      "tadelakt polished microcement in warm putty all around, mirror panel above the basin",
+      "ceiling":    "matte white plaster",
+      "lighting":   "two alabaster wall sconces flanking the mirror, soft diffused daylight through the frosted north window",
+      "furniture":  "monolithic stone bathtub hand-carved, wall-hung porcelain wash basin, Vola brushed-brass tapware, wall-hung WC with concealed cistern",
+      "colors":     "warm stone, putty, soft brass — all neutrals",
+      "extra":      "rolled linen towels stacked on a small teak stool beside the bath, single olive branch in a slim ceramic vase"
     },
 
     {
-      "name":      "Chambre 2",
-      "floor":     "european white-oak engineered planks",
-      "walls":     "linen-textured wallcovering in ivory",
-      "lighting":  "single Akari pendant centered, soft natural daylight from a small window",
-      "furniture": "single bed with a slim wood frame and bouclé headboard, narrow nightstand with a stone-base lamp, slim wardrobe along the side wall, small desk with a Wegner CH24 chair",
-      "colors":    "ivory, warm woods, accent in deep navy throw",
-      "extra":     "a few books stacked on the nightstand, a small monstera plant in the corner"
+      "name":       "Chambre 2",
+      "dimensions": "smaller bedroom, 3.01 × 3.32 m extended, 12.4 m², 2.6 m ceiling",
+      "layout":     "one window on the west wall, door on the east wall opening to the hall, north wall shared with chambre 1, south wall against the shower room",
+      "placement":  "single bed along the south wall with headboard against the south wall, slim wardrobe along the west wall under/beside the window, small nightstand at the foot of the bed",
+      "viewpoint":  "view from the north-east corner near the door, looking south-west — the single bed is along the right wall, the window on the far wall",
+      "floor":      "european white-oak engineered planks",
+      "walls":      "linen-textured wallcovering in ivory",
+      "ceiling":    "matte white, single small Akari pendant centred",
+      "lighting":   "single Akari pendant, soft west-facing daylight from the single window",
+      "furniture":  "slim single bed with bouclé headboard and pale oak frame, narrow nightstand with a stone-base lamp, slim wardrobe along the west wall, small writing desk with a Wegner CH24 chair",
+      "colors":     "ivory and warm woods, accent in deep navy throw on the bed",
+      "extra":      "a few books stacked on the nightstand, a small monstera plant in the corner"
     },
 
     {
-      "name":      "Cuisine",
-      "floor":     "matte porcelain stoneware, 80×80, taupe",
-      "walls":     "handle-less matte lacquer cabinetry in sage green, full-height stone backsplash (taj mahal quartzite, honed)",
-      "ceiling":   "matte white with recessed downlights and a single linear pendant over the worktop",
-      "lighting":  "single tube pendant over the worktop, downlights, soft morning light from the side",
-      "furniture": "monolithic stone island with waterfall edge, integrated stainless steel sink, La Cornue range, full-height oak veneer pantry",
-      "colors":    "sage green, taupe stone, warm oak, brass tapware",
-      "extra":     "a bowl of lemons on the island, fresh herbs in small ceramic pots on the window ledge, single bar stool in oak"
+      "name":       "Salle d'eau",
+      "dimensions": "small wet room, 2.20 × 1.16 m, 2.55 m², 2.6 m ceiling",
+      "layout":     "no window, door on the north wall connecting to the hall, single ventilation grille",
+      "placement":  "frameless walk-in shower along the back (south) wall, slim wall-hung porcelain basin on the east wall, small wall-hung WC on the west wall",
+      "viewpoint":  "view from the doorway looking south straight at the walk-in shower against the back wall, basin on the left edge of the frame",
+      "floor":      "honed travertine tiles, 30×30",
+      "walls":      "tadelakt microcement, warm ochre tone",
+      "ceiling":    "matte white plaster with a single small downlight",
+      "lighting":   "single alabaster wall sconce above the basin, warm 2700K downlight in the shower",
+      "furniture":  "frameless walk-in shower with rain head, slim wall-hung porcelain basin, brushed-brass tapware (Vola), wall-hung WC",
+      "colors":     "ochre tadelakt, warm stone, brass",
+      "extra":      "single linen hand-towel on a brass hook"
     },
 
     {
-      "name":      "Salle d'eau",
-      "floor":     "honed travertine tiles",
-      "walls":     "tadelakt microcement, ochre tone",
-      "lighting":  "single alabaster wall sconce, soft warm 2700K",
-      "furniture": "frameless walk-in shower with rain head, slim wall-hung porcelain basin, brushed-brass tapware",
-      "colors":    "ochre, warm stone, brass",
-      "extra":     "single linen hand-towel on a brass hook"
+      "name":       "Hall",
+      "dimensions": "narrow corridor, 4.6 × 2.16 m, 8.76 m², 2.6 m ceiling",
+      "layout":     "front door at the south end, doors lining both sides — to chambre 2 / salle d'eau on the west, to dressing / changing room on the east, opens to the séjour at the north end",
+      "placement":  "slim oak console with a stone bowl for keys along the east wall halfway down, tall mirror above the console, simple oak bench along the opposite (west) wall",
+      "viewpoint":  "axial one-point perspective standing at the south end (front door) looking due north all the way to the séjour at the far end — the corridor recedes symmetrically",
+      "floor":      "smoked oak chevron parquet running along the length",
+      "walls":      "warm-white limewash, both sides",
+      "ceiling":    "matte white with a linear cove LED hidden in a plaster reveal along the ceiling edge",
+      "lighting":   "single warm cove LED at the ceiling line, single wall sconce above the console",
+      "furniture":  "slim oak console with stone bowl, tall full-height mirror, narrow oak bench with linen cushion",
+      "colors":     "warm neutrals, oak and stone",
+      "extra":      "framed abstract print on the wall, small dried floral arrangement in a stone vase on the console"
     },
 
     {
-      "name":      "Hall",
-      "floor":     "smoked oak chevron parquet",
-      "walls":     "warm white limewash",
-      "lighting":  "linear cove LED 2700K hidden in plaster reveal at the ceiling line, single wall sconce",
-      "furniture": "slim oak console with a stone bowl for keys, a tall mirror, simple wood bench",
-      "colors":    "warm neutrals, oak and stone",
-      "extra":     "framed abstract print on the wall, small dried floral arrangement in a stone vase",
-      "view":      "axial_one_point"
+      "name":       "Dressing",
+      "dimensions": "rectangular changing room, 2.35 × 2.34 m, 5.57 m², 2.6 m ceiling",
+      "layout":     "no window (interior room), door on the east wall opening to the hall, blank walls on the other three sides — designed as a full-height storage room",
+      "placement":  "full-height oak wardrobes wrapping three walls (south, north, west), bench in the centre",
+      "viewpoint":  "view from the doorway on the east wall looking west into the room — wardrobes wrap left, right and back, bench centred",
+      "floor":      "matte porcelain stoneware in taupe",
+      "walls":      "fluted oak panelling on all wardrobe doors, lime plaster on the door wall",
+      "ceiling":    "matte white, single recessed downlight + linear LED inside the wardrobes",
+      "lighting":   "single downlight, LED strips inside the wardrobes glowing through the slats",
+      "furniture":  "wall-to-wall floor-to-ceiling fluted oak wardrobes (three walls), narrow upholstered bench in oat-milk linen in the centre",
+      "colors":     "warm oak, ivory upholstery, taupe floor",
+      "extra":      "a folded cashmere throw on the bench, a few books and a small ceramic tray"
+    },
+
+    {
+      "name":       "Cuisine",
+      "dimensions": "rectangular galley kitchen, 3.05 × 2.68 m, 8.17 m², 2.6 m ceiling",
+      "layout":     "window on the east wall above the sink area, opening to the séjour on the north side (no door), built-in along the south wall, fridge in the north-east corner",
+      "placement":  "L-shaped cabinetry: south wall = oven + stove + counter, east wall = sink under window + counter, refrigerator in the corner where the two walls meet, no island (galley shape)",
+      "viewpoint":  "view from the opening on the north side, standing where the séjour ends, looking south into the kitchen — the L-shaped run wraps left and ahead, the window on the left lets in morning light",
+      "floor":      "matte porcelain stoneware, 80×80, taupe",
+      "walls":      "handle-less matte lacquer cabinetry in sage green on the lower run, full-height stone backsplash (taj mahal quartzite, honed) on the south wall",
+      "ceiling":    "matte white plaster with a single linear tube pendant over the worktop, two recessed downlights",
+      "lighting":   "single linear tube pendant over the worktop, recessed downlights, soft east-side morning daylight through the window",
+      "furniture":  "L-shaped countertop in honed quartzite, integrated stainless-steel sink under the east window, La Cornue range on the south wall, full-height oak veneer pantry in the corner, integrated panel-front refrigerator",
+      "colors":     "sage green cabinetry, taupe stone floor, warm oak, brass tapware",
+      "extra":      "a bowl of lemons on the worktop, fresh herbs in small ceramic pots on the window ledge, no bar stools (galley)"
     }
   ]
 }
