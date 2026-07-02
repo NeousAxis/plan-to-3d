@@ -62,9 +62,20 @@ du JSON brut (le repo CubiCasa5k est open source, le Space Viraj est forkable). 
 HF write. **C'est LA première tâche de la prochaine session.** Ne PAS brancher les données
 bruitées de l'extraction d'overlays dans plan_reader — le plan actuel est enfin juste.
 
+### ⛔ LIMITE STRUCTURELLE identifiée en fin de session (l'user l'a démontrée, crop à l'appui)
+Le schéma plan.json ne connaît que des pièces RECTANGULAIRES (`rect`). Or sur son plan la
+**CHANGING ROOM est en L : elle ENVELOPPE le WC** (le bras au-dessus du WC porte le lave-mains,
+la porte du WC ouvre en haut depuis ce bras). Conséquences irréparables par heuristique :
+changing rect + couloir fantôme au-dessus du WC + porte WC au mauvais endroit + glyphe penderie
+(l'user n'a RIEN à cet endroit). **Ne PAS re-patcher les heuristiques.** Le fix :
+1. **`rooms[].poly`** (polygone rectiligne, fallback `rect`) dans le schéma + rendu 2D/3D ;
+2. le **Space de segmentation JSON** qui sort les vraies formes (CubiCasa donne des polygones) ;
+3. glyphes mobilier changing : lave-mains seul par défaut (pas de penderie « canapé »).
+
 ### 👉 REPRENDRE PAR ICI
 0. **Déployer le Space de segmentation JSON** (voir 🎯 ci-dessus) puis brancher dans plan_reader :
-   bboxes pièces → hints du paveur ; portes/fenêtres → remplacent les heuristiques (fallback gardé).
+   **polygones** de pièces (pas bboxes) + portes/fenêtres → remplacent les heuristiques.
+   Puis supporter `poly` dans le paveur, cad.html (2D+3D) et plan_dxf export.
 1. ~~Lecture AUTO du raster → plan.json~~ ✅ **FAIT — 9/9 pièces (WC compris) bien placées**
    sur le plan réel. Commande unique : `python3 plan_reader.py read "work/_plan/Plan appartement.jpg"
    -o web/plans/appart_auto.json` (~4 appels quota CF : N passes + labels + complétude).
