@@ -1,0 +1,190 @@
+{
+  "project": "Apartment 2BR (lecture auto)",
+  "units": "m",
+  "wall_height": 2.5,
+  "envelope": [
+    14.26,
+    7.04
+  ],
+  "rooms": [
+    {
+      "name": "BEDROOM 1",
+      "area_m2": 19.72,
+      "rect": [
+        0.0,
+        0.01,
+        5.36,
+        3.73
+      ],
+      "doors": [
+        {
+          "wall": "S",
+          "at": 0.85
+        }
+      ],
+      "windows": [
+        {
+          "wall": "W",
+          "at": 0.5
+        }
+      ],
+      "furniture": []
+    },
+    {
+      "name": "BATHROOM",
+      "area_m2": 5.71,
+      "rect": [
+        5.29,
+        0.01,
+        7.69,
+        2.39
+      ],
+      "doors": [
+        {
+          "wall": "S",
+          "at": 0.5
+        }
+      ],
+      "windows": [],
+      "furniture": []
+    },
+    {
+      "name": "LIVING ROOM",
+      "area_m2": 27.95,
+      "rect": [
+        7.69,
+        0.0,
+        14.19,
+        4.3
+      ],
+      "doors": [
+        {
+          "wall": "S",
+          "at": 0.1
+        }
+      ],
+      "windows": [
+        {
+          "wall": "N",
+          "at": 0.5
+        },
+        {
+          "wall": "E",
+          "at": 0.4
+        }
+      ],
+      "furniture": []
+    },
+    {
+      "name": "BEDROOM 2",
+      "area_m2": 12.42,
+      "rect": [
+        0.0,
+        3.72,
+        3.74,
+        7.04
+      ],
+      "doors": [
+        {
+          "wall": "E",
+          "at": 0.12
+        }
+      ],
+      "windows": [
+        {
+          "wall": "W",
+          "at": 0.5
+        }
+      ],
+      "furniture": []
+    },
+    {
+      "name": "SHOWER ROOM",
+      "area_m2": 2.55,
+      "rect": [
+        3.25,
+        5.58,
+        5.45,
+        6.74
+      ],
+      "doors": [
+        {
+          "wall": "N",
+          "at": 0.5
+        }
+      ],
+      "windows": [],
+      "furniture": []
+    },
+    {
+      "name": "HALL",
+      "area_m2": 8.76,
+      "label_at": [
+        7.13,
+        3.52
+      ],
+      "_warn": [
+        "insufficient data: need area + one side, or both sides"
+      ]
+    },
+    {
+      "name": "CHANGING ROOM",
+      "area_m2": 5.57,
+      "rect": [
+        7.6,
+        4.56,
+        9.95,
+        6.93
+      ],
+      "doors": [
+        {
+          "wall": "N",
+          "at": 0.5
+        }
+      ],
+      "windows": [],
+      "furniture": []
+    },
+    {
+      "name": "WC",
+      "area_m2": 2.47,
+      "rect": [
+        9.95,
+        4.33,
+        10.87,
+        7.01
+      ],
+      "doors": [
+        {
+          "wall": "N",
+          "at": 0.5
+        }
+      ],
+      "windows": [],
+      "furniture": []
+    },
+    {
+      "name": "KITCHEN",
+      "area_m2": 8.17,
+      "rect": [
+        10.88,
+        4.33,
+        13.93,
+        7.01
+      ],
+      "doors": [
+        {
+          "wall": "N",
+          "at": 0.35
+        }
+      ],
+      "windows": [
+        {
+          "wall": "E",
+          "at": 0.5
+        }
+      ],
+      "furniture": []
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "project": "Maison plain-pied 3 chambres",
+  "_source": "Transcrit du plan papier de l'user (collé en chat). Dimensions ESTIMÉES à l'échelle du lit 140×190 — remplacer par les cotes réelles si dispo.",
+  "global": {
+    "style": "japandi",
+    "atmosphere": "warm",
+    "tech": "architectural interior photography, magazine quality (Dezeen, AD), ultra-photoreal, soft natural daylight, straight verticals, 24mm wide-angle"
+  },
+  "rooms": [
+    {
+      "name": "Salon / Séjour / Cuisine",
+      "dimensions": "open-plan L-shape, approx 8.50 × 6.00 m, ~48 m², 2.50 m ceiling",
+      "layout": "large open living-dining-kitchen; full-height windows with roller shutters on the east and south walls, kitchen along the north-west wall (sink under a window, cooktop and counter), opening onto the hall to the west",
+      "placement": "low modular sofa facing the south windows, round dining table with 4 chairs near the kitchen, kitchen island/counter against north wall, NO clutter",
+      "viewpoint": "wide-angle 24mm shot from the west corner looking east toward the big windows, eye-level ~1.6 m, straight verticals",
+      "floor": "european white-oak engineered planks, matte oil finish",
+      "walls": "lime plaster, hand-troweled, warm white",
+      "ceiling": "matte white plaster, recessed downlights",
+      "lighting": "soft natural daylight flooding from south/east windows, discreet linear cove light",
+      "furniture": "low oak-framed linen sofa, round oak dining table with 4 wishbone chairs, minimalist sage-green kitchen cabinetry with stone counter",
+      "colors": "Farrow & Ball Cornforth White, warm neutrals, terracotta accents, sage green kitchen",
+      "extra": "potted olive tree by the window, dried branches in a stone pot"
+    },
+    {
+      "name": "Chambre 1",
+      "dimensions": "rectangular, approx 3.50 × 3.40 m, ~12 m², 2.50 m ceiling",
+      "layout": "window with roller shutter on the south wall, door to the hall on the north wall, built-in wardrobe on the east wall",
+      "placement": "double bed (140×190) centred against the west wall, wardrobe on the east wall. NO desk, NO sofa",
+      "viewpoint": "frontal wide-angle shot facing the bed against the west wall, eye-level ~1.6 m, straight verticals",
+      "floor": "european white-oak engineered planks, matte oil finish",
+      "walls": "lime plaster, hand-troweled, warm white",
+      "ceiling": "matte white plaster",
+      "lighting": "soft natural daylight, two minimalist pendant bedside sconces",
+      "furniture": "double bed with solid light-oak frame visible (~35 cm tall), full-height oak wardrobe, two small bedside tables",
+      "colors": "warm neutrals, linen bedding, terracotta accent cushion",
+      "extra": "single abstract earth-tone canvas above the bed"
+    },
+    {
+      "name": "Chambre 2",
+      "dimensions": "rectangular, approx 3.30 × 3.20 m, ~10.5 m², 2.50 m ceiling",
+      "layout": "window on the north wall, small wardrobe/placard with window on the west wall, door to the corridor (DGT) on the south wall",
+      "placement": "double bed (140×190) against the east wall, wardrobe on the west wall. NO desk, NO double sofa",
+      "viewpoint": "frontal wide-angle shot facing the bed against the east wall, eye-level ~1.6 m, straight verticals",
+      "floor": "european white-oak engineered planks, matte oil finish",
+      "walls": "lime plaster, hand-troweled, warm white",
+      "ceiling": "matte white plaster",
+      "lighting": "soft natural daylight from the north window, one drum-shade pendant",
+      "furniture": "double bed with solid light-oak frame visible (~35 cm tall), light-oak wardrobe, one bedside table",
+      "colors": "warm neutrals, linen bedding, muted sage accent",
+      "extra": "woven knit ottoman, small potted plant"
+    },
+    {
+      "name": "Chambre 3",
+      "dimensions": "rectangular, approx 3.30 × 3.20 m, ~10.5 m², 2.50 m ceiling",
+      "layout": "window with roller shutter on the north wall, door to the corridor on the south wall, wardrobe on the east wall",
+      "placement": "double bed (140×190) against the north wall under the window, wardrobe on the east wall. NO desk, NO bunk",
+      "viewpoint": "frontal wide-angle shot facing the bed under the north window, eye-level ~1.6 m, straight verticals",
+      "floor": "european white-oak engineered planks, matte oil finish",
+      "walls": "lime plaster, hand-troweled, warm white",
+      "ceiling": "matte white plaster",
+      "lighting": "soft natural daylight, one minimalist drop pendant",
+      "furniture": "double bed with solid light-oak frame visible (~35 cm tall), light-oak wardrobe, one bedside table",
+      "colors": "warm neutrals, linen bedding, terracotta accent",
+      "extra": "dried branch in a ceramic vase"
+    },
+    {
+      "name": "Salle de bain",
+      "dimensions": "rectangular, approx 2.80 × 2.40 m, ~6.7 m², 2.50 m ceiling",
+      "layout": "window on the west wall, freestanding bathtub against the west wall under the window, double vanity along the south wall, door on the east wall",
+      "placement": "freestanding oval bathtub under the west window, double washbasin vanity on the south wall. NO toilet (separate WC)",
+      "viewpoint": "wide-angle shot from the door looking toward the bathtub and window, eye-level ~1.6 m, straight verticals",
+      "floor": "honed travertine large-format tiles, warm putty",
+      "walls": "lime plaster, hand-troweled, warm white, travertine splashback",
+      "ceiling": "matte white plaster, recessed downlights",
+      "lighting": "soft natural daylight from the window, warm LED niche strip",
+      "furniture": "freestanding matte-white resin bathtub, floating oak double vanity with stone top, oval brass-framed mirror",
+      "colors": "warm putty travertine, oak, brushed brass fittings",
+      "extra": "stacked linen towels, small potted olive branch"
+    },
+    {
+      "name": "WC",
+      "dimensions": "small, approx 1.40 × 1.10 m, ~1.5 m², 2.50 m ceiling",
+      "layout": "wall-hung toilet against the west wall, door on the east wall",
+      "placement": "wall-hung WC against the west wall, small corner basin. NOTHING else",
+      "viewpoint": "frontal wide-angle shot facing the toilet wall, eye-level ~1.4 m, straight verticals",
+      "floor": "honed travertine tiles, warm putty",
+      "walls": "lime plaster warm white, half-height oak panelling",
+      "ceiling": "matte white plaster",
+      "lighting": "soft warm downlight",
+      "furniture": "wall-hung WC, slim oak shelf, small framed print",
+      "colors": "warm white, oak, putty",
+      "extra": "single dried stem in a small vase"
+    },
+    {
+      "name": "Hall",
+      "dimensions": "approx 2.50 × 2.20 m, ~5.5 m², 2.50 m ceiling",
+      "layout": "entry hall connecting the porch (south) to the open living area (east) and the bedroom corridor (north)",
+      "placement": "oak console table against one wall, oak-framed mirror above it, slatted oak bench. NO heavy furniture",
+      "viewpoint": "wide-angle shot from the entrance looking in, eye-level ~1.6 m, straight verticals",
+      "floor": "european white-oak engineered planks, matte oil finish",
+      "walls": "lime plaster, hand-troweled, warm white",
+      "ceiling": "matte white plaster, recessed downlights",
+      "lighting": "soft natural daylight, warm wall sconce",
+      "furniture": "solid oak console / side table, oak-framed wall mirror, low oak slatted bench",
+      "colors": "warm neutrals, oak, putty",
+      "extra": "woven basket, ceramic vase with dried branches"
+    },
+    {
+      "name": "Cellier",
+      "dimensions": "rectangular, approx 2.60 × 2.20 m, ~5.7 m², 2.50 m ceiling",
+      "layout": "utility room off the hall; washing machine and storage along the walls, heat-pump unit",
+      "placement": "stacked washer/dryer against one wall, floor-to-ceiling storage cabinets, worktop",
+      "viewpoint": "wide-angle shot from the door, eye-level ~1.6 m, straight verticals",
+      "floor": "honed travertine tiles, warm putty",
+      "walls": "lime plaster, warm white",
+      "ceiling": "matte white plaster",
+      "lighting": "clean bright utility downlights",
+      "furniture": "full-height light-oak storage cabinetry, worktop with stone top, stacked laundry appliances",
+      "colors": "warm white, light oak, putty",
+      "extra": "woven baskets on shelves, NO clutter"
+    }
+  ]
+}

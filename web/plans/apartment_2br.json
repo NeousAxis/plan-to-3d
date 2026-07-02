@@ -1,0 +1,74 @@
+{
+  "project": "Apartment 2BR — plan user",
+  "units": "m",
+  "wall_height": 2.5,
+  "rooms": [
+    {
+      "name": "BEDROOM 1", "rect": [0, 0, 5.36, 3.72], "area_m2": 19.72,
+      "doors":   [{"wall": "S", "at": 0.85}],
+      "windows": [{"wall": "W", "at": 0.5}],
+      "furniture": [
+        {"item": "lit double", "rect": [0.3, 0.25, 1.9, 2.25], "h": 0.5},
+        {"item": "armoire",    "rect": [0.1, 2.95, 2.6, 3.55], "h": 1.9}
+      ]
+    },
+    {
+      "name": "BATHROOM", "rect": [5.36, 0, 7.76, 2.38], "area_m2": 5.71,
+      "doors":   [{"wall": "S", "at": 0.5}],
+      "windows": [],
+      "furniture": [
+        {"item": "baignoire", "rect": [5.55, 0.25, 7.55, 0.9], "h": 0.55}
+      ]
+    },
+    {
+      "name": "LIVING ROOM", "rect": [7.76, 0, 14.26, 4.30], "area_m2": 27.95,
+      "doors":   [{"wall": "S", "at": 0.10}],
+      "windows": [{"wall": "N", "at": 0.5}, {"wall": "E", "at": 0.4}],
+      "furniture": [
+        {"item": "canapé",         "rect": [8.2, 1.3, 9.3, 3.3],   "h": 0.45},
+        {"item": "table basse",    "rect": [9.9, 2.0, 10.7, 3.0],  "h": 0.35},
+        {"item": "table à manger", "rect": [12.4, 1.0, 13.8, 3.1], "h": 0.75},
+        {"item": "meuble TV",      "rect": [9.0, 0.15, 12.0, 0.5], "h": 0.5}
+      ]
+    },
+    {
+      "name": "BEDROOM 2", "rect": [0, 3.72, 3.74, 7.04], "area_m2": 12.42,
+      "doors":   [{"wall": "E", "at": 0.12}],
+      "windows": [{"wall": "W", "at": 0.5}],
+      "furniture": [
+        {"item": "lit double", "rect": [0.3, 4.9, 1.9, 6.9], "h": 0.5}
+      ]
+    },
+    {
+      "name": "SHOWER ROOM", "rect": [3.74, 5.31, 5.21, 7.04], "area_m2": 2.55,
+      "doors":   [{"wall": "N", "at": 0.5}],
+      "windows": [],
+      "furniture": [
+        {"item": "douche", "rect": [3.95, 5.5, 4.95, 6.85], "h": 0.12}
+      ]
+    },
+    {
+      "name": "CHANGING ROOM", "rect": [7.61, 4.30, 9.96, 6.98], "area_m2": 5.57,
+      "doors":   [{"wall": "N", "at": 0.5}],
+      "windows": [],
+      "furniture": []
+    },
+    {
+      "name": "WC", "rect": [9.96, 4.30, 10.88, 6.98], "area_m2": 2.47,
+      "doors":   [{"wall": "N", "at": 0.5}],
+      "windows": [],
+      "furniture": []
+    },
+    {
+      "name": "KITCHEN", "rect": [10.88, 4.30, 14.26, 6.98], "area_m2": 8.17,
+      "doors":   [{"wall": "N", "at": 0.35}],
+      "windows": [{"wall": "E", "at": 0.5}],
+      "furniture": [
+        {"item": "plan de travail", "rect": [10.95, 6.45, 14.15, 6.9], "h": 0.9}
+      ]
+    },
+    {
+      "name": "HALL", "area_m2": 8.76, "label_at": [6.45, 3.55]
+    }
+  ]
+}

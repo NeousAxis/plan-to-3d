@@ -1,0 +1,239 @@
+{
+  "project": "Appartement 2BR (100% auto)",
+  "units": "m",
+  "wall_height": 2.5,
+  "envelope": [
+    14.26,
+    7.04
+  ],
+  "rooms": [
+    {
+      "name": "BEDROOM 1",
+      "area_m2": 19.72,
+      "rect": [
+        0.0,
+        0.0,
+        5.36,
+        3.72
+      ],
+      "doors": [
+        {
+          "wall": "W",
+          "at": 0.0
+        },
+        {
+          "wall": "E",
+          "at": 0.5
+        }
+      ],
+      "windows": [
+        {
+          "wall": "N",
+          "at": 0.5
+        },
+        {
+          "wall": "E",
+          "at": 0.5
+        },
+        {
+          "wall": "N",
+          "at": 0.75
+        }
+      ],
+      "furniture": []
+    },
+    {
+      "name": "BEDROOM 2",
+      "area_m2": 12.42,
+      "rect": [
+        0.0,
+        3.72,
+        3.01,
+        7.04
+      ],
+      "doors": [
+        {
+          "wall": "W",
+          "at": 0.0
+        },
+        {
+          "wall": "E",
+          "at": 0.5
+        }
+      ],
+      "windows": [
+        {
+          "wall": "N",
+          "at": 0.5
+        },
+        {
+          "wall": "E",
+          "at": 0.5
+        }
+      ],
+      "furniture": []
+    },
+    {
+      "name": "BATHROOM",
+      "area_m2": 5.71,
+      "rect": [
+        5.36,
+        0.0,
+        7.76,
+        2.26
+      ],
+      "doors": [
+        {
+          "wall": "W",
+          "at": 0.0
+        },
+        {
+          "wall": "W",
+          "at": 0.5
+        }
+      ],
+      "windows": [],
+      "furniture": []
+    },
+    {
+      "name": "SHOWER ROOM",
+      "area_m2": 2.55,
+      "rect": [
+        3.01,
+        5.89,
+        5.36,
+        6.98
+      ],
+      "doors": [
+        {
+          "wall": "W",
+          "at": 0.0
+        },
+        {
+          "wall": "E",
+          "at": 0.5
+        }
+      ],
+      "windows": [],
+      "furniture": [],
+      "_warn": [
+        "insufficient data: need area + one side, or both sides"
+      ]
+    },
+    {
+      "name": "CHANGING ROOM",
+      "area_m2": 5.57,
+      "rect": [
+        7.61,
+        4.67,
+        9.96,
+        7.04
+      ],
+      "doors": [
+        {
+          "wall": "W",
+          "at": 0.0
+        },
+        {
+          "wall": "W",
+          "at": 0.5
+        }
+      ],
+      "windows": [],
+      "furniture": [],
+      "_warn": [
+        "insufficient data: need area + one side, or both sides"
+      ]
+    },
+    {
+      "name": "KITCHEN",
+      "area_m2": 8.17,
+      "rect": [
+        10.88,
+        4.3,
+        13.93,
+        7.04
+      ],
+      "doors": [
+        {
+          "wall": "W",
+          "at": 0.0
+        },
+        {
+          "wall": "W",
+          "at": 0.5
+        }
+      ],
+      "windows": [],
+      "furniture": []
+    },
+    {
+      "name": "LIVING ROOM",
+      "area_m2": 27.95,
+      "rect": [
+        7.76,
+        0.0,
+        14.26,
+        4.3
+      ],
+      "doors": [
+        {
+          "wall": "W",
+          "at": 0.0
+        },
+        {
+          "wall": "W",
+          "at": 0.5
+        }
+      ],
+      "windows": [
+        {
+          "wall": "N",
+          "at": 0.5
+        },
+        {
+          "wall": "E",
+          "at": 0.5
+        },
+        {
+          "wall": "N",
+          "at": 0.25
+        },
+        {
+          "wall": "N",
+          "at": 0.75
+        }
+      ],
+      "furniture": []
+    },
+    {
+      "name": "HALL",
+      "area_m2": 8.76,
+      "rect": [
+        5.36,
+        3.09,
+        7.61,
+        6.98
+      ],
+      "doors": [
+        {
+          "wall": "W",
+          "at": 0.0
+        },
+        {
+          "wall": "E",
+          "at": 0.5
+        },
+        {
+          "wall": "W",
+          "at": 0.5
+        }
+      ],
+      "windows": [],
+      "furniture": [],
+      "_warn": [
+        "insufficient data: need area + one side, or both sides"
+      ]
+    }
+  ]
+}
