@@ -469,11 +469,42 @@ def _fix_openings(rooms_by_name, rects, EW, ED, hall_pt, circ_cells,
         px, py = ax + t * dx, ay + t * dy
         return t, (px - hall_pt[0]) ** 2 + (py - hall_pt[1]) ** 2
 
+    def _shared_run(a, b):
+        """(wall_of_a, run_length, centre_t) of the wall a shares with b."""
+        for wall, (e1, e2, lo, hi, olo, ohi) in {
+                "E": (a[2], b[0], a[1], a[3], b[1], b[3]),
+                "W": (a[0], b[2], a[1], a[3], b[1], b[3]),
+                "S": (a[3], b[1], a[0], a[2], b[0], b[2]),
+                "N": (a[1], b[3], a[0], a[2], b[0], b[2])}.items():
+            run = min(hi, ohi) - max(lo, olo)
+            if abs(e1 - e2) < 0.03 and run > 0:
+                mid = (max(lo, olo) + min(hi, ohi)) / 2
+                return wall, run, (mid - lo) / (hi - lo)
+        return None, 0, 0.5
+
     for name, rc in rects.items():
         r = rooms_by_name[name]
         if _is_circ(name):
             r["doors"], r["windows"] = [], []
             continue
+        # en-suite pattern: a small WC embedded next to a changing room /
+        # bedroom / bathroom opens INTO that room, not onto the corridor —
+        # the classic "WC dans la pièce" layout (cf. the user's plan)
+        if _room_kind(name) == "wc" and \
+                (rc[2] - rc[0]) * (rc[3] - rc[1]) <= 3.5:
+            host = None
+            for nm2, rc2 in rects.items():
+                if nm2 == name or \
+                        _room_kind(nm2) not in ("changing", "bedroom", "bathroom"):
+                    continue
+                wall, run, mid = _shared_run(rc, rc2)
+                if wall and run >= 0.7 and (host is None or run > host[1]):
+                    host = (wall, run, mid, nm2)
+            if host:
+                r["doors"] = [{"wall": host[0],
+                               "at": round(max(0.12, min(0.88, host[2])), 2)}]
+                r["windows"] = []
+                continue
         # door: interior wall — max circulation contact (door sits at the
         # centre of the widest shared run), else nearest point to the hall
         best = None
@@ -588,9 +619,11 @@ def _furnish(rooms_by_name, rects):
         win_walls = {o["wall"] for o in r.get("windows", [])}
         door_walls = {o["wall"] for o in r.get("doors", [])}
 
-        def clear_of_door(fr, m=0.75):
+        def clear_of_door(fr, m=None):
             if not door:
                 return True
+            if m is None:                     # micro-rooms: smaller clearance
+                m = 0.75 if w * d >= 3.0 else 0.4
             dx = max(fr[0] - door[0], 0, door[0] - fr[2])
             dy = max(fr[1] - door[1], 0, door[1] - fr[3])
             return (dx * dx + dy * dy) ** 0.5 >= m
@@ -614,20 +647,21 @@ def _furnish(rooms_by_name, rects):
             return sorted(walls, key=lambda wl: (wl in door_walls) * 2
                           + (wl in win_walls))
 
-        def place(kind, item, wall, fw, fd, h, at=0.5):
+        def place(kind, item, wall, fw, fd, h, at=0.5, clearance=None):
             # size along wall must fit
             span = w if wall in ("N", "S") else d
             if fw > span - 0.2:
                 fw = span - 0.2
             if fw <= 0.2:
                 return None
-            fr = against(wall, fw, fd, at=at)
-            if not clear_of_door(fr):
-                return None
-            fr = [round(v, 2) for v in fr]
-            furn.append({"item": item, "kind": kind, "rect": fr, "h": h,
-                         "wall": wall})
-            return fr
+            for a in (at, 0.65, 0.35, 0.8, 0.2):     # slide along the wall
+                fr = against(wall, fw, fd, at=a)
+                if clear_of_door(fr, clearance):
+                    fr = [round(v, 2) for v in fr]
+                    furn.append({"item": item, "kind": kind, "rect": fr,
+                                 "h": h, "wall": wall})
+                    return fr
+            return None
 
         def place_any(kind, item, fw, fd, h, walls=None):
             for wl in (walls or quiet_walls()):
@@ -688,17 +722,23 @@ def _furnish(rooms_by_name, rects):
             if w * d >= 5:
                 place_any("toilet", "wc", 0.4, 0.66, 0.78)
         elif kind == "shower":
-            walls = [wl for wl in quiet_walls()]
-            place_any("shower", "douche", 0.95, 0.95, 0.15, walls=walls)
-            place_any("vanity", "lave-mains", 0.7, 0.42, 0.85)
+            placed_tray = False
+            for wl in quiet_walls():
+                if place("shower", "douche", wl, 0.95, 0.95, 0.15,
+                         clearance=0.12):
+                    placed_tray = True
+                    break
+            if placed_tray:
+                place_any("vanity", "lave-mains", 0.7, 0.42, 0.85)
         elif kind == "wc":
             place_any("toilet", "wc", 0.42, 0.68, 0.78)
-            place_any("vanity", "lave-mains", 0.5, 0.32, 0.85)
+            if w * d > 2.2:                     # only if the WC is roomy
+                place_any("vanity", "lave-mains", 0.5, 0.32, 0.85)
         elif kind == "changing":
             qws = quiet_walls()
-            place("wardrobe", "penderie", qws[0], max(w, d) - 0.3, 0.6, 2.2)
-            if len(qws) > 1:
-                place("wardrobe", "penderie", qws[1], max(w, d) - 0.9, 0.6, 2.2)
+            place("wardrobe", "penderie", qws[0], max(w, d) - 0.9, 0.6, 2.2)
+            place_any("vanity", "lave-mains", 0.55, 0.36, 0.85,
+                      walls=qws[1:] or qws)
         r["furniture"] = furn
 
 

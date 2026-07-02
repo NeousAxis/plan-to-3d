@@ -260,7 +260,32 @@
         }
       ],
       "windows": [],
-      "furniture": [],
+      "furniture": [
+        {
+          "item": "douche",
+          "kind": "shower",
+          "rect": [
+            3.63,
+            5.98,
+            4.58,
+            6.93
+          ],
+          "h": 0.15,
+          "wall": "S"
+        },
+        {
+          "item": "lave-mains",
+          "kind": "vanity",
+          "rect": [
+            3.76,
+            6.51,
+            4.46,
+            6.93
+          ],
+          "h": 0.85,
+          "wall": "S"
+        }
+      ],
       "_warn": [
         "insufficient data: need area + one side, or both sides"
       ]
@@ -286,24 +311,24 @@
           "item": "penderie",
           "kind": "wardrobe",
           "rect": [
-            7.75,
+            8.05,
             6.39,
-            9.82,
+            9.52,
             6.99
           ],
           "h": 2.2,
           "wall": "S"
         },
         {
-          "item": "penderie",
-          "kind": "wardrobe",
+          "item": "lave-mains",
+          "kind": "vanity",
           "rect": [
             7.66,
-            5.56,
-            9.13,
-            6.16
+            5.68,
+            8.21,
+            6.04
           ],
-          "h": 2.2,
+          "h": 0.85,
           "wall": "W"
         }
       ],
@@ -456,7 +481,7 @@
       ],
       "doors": [
         {
-          "wall": "N",
+          "wall": "W",
           "at": 0.5
         }
       ],
@@ -466,25 +491,13 @@
           "item": "wc",
           "kind": "toilet",
           "rect": [
-            10.21,
-            6.25,
-            10.63,
-            6.93
+            10.35,
+            5.0,
+            10.77,
+            5.68
           ],
           "h": 0.78,
-          "wall": "S"
-        },
-        {
-          "item": "lave-mains",
-          "kind": "vanity",
-          "rect": [
-            10.17,
-            6.61,
-            10.67,
-            6.93
-          ],
-          "h": 0.85,
-          "wall": "S"
+          "wall": "N"
         }
       ],
       "_warn": [
