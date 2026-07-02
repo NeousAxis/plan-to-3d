@@ -2,6 +2,44 @@
   "project": "Appartement 2BR (100% auto)",
   "units": "m",
   "wall_height": 2.5,
+  "circulation": [
+    [
+      3.01,
+      3.72,
+      7.76,
+      4.67
+    ],
+    [
+      3.01,
+      4.67,
+      7.61,
+      5.82
+    ],
+    [
+      5.21,
+      5.82,
+      7.61,
+      6.98
+    ],
+    [
+      5.36,
+      2.38,
+      7.76,
+      3.72
+    ],
+    [
+      7.76,
+      4.3,
+      10.88,
+      4.67
+    ],
+    [
+      9.96,
+      4.67,
+      10.88,
+      4.95
+    ]
+  ],
   "envelope": [
     14.26,
     7.04
@@ -19,7 +57,7 @@
       "doors": [
         {
           "wall": "S",
-          "at": 0.85
+          "at": 0.78
         }
       ],
       "windows": [
@@ -28,7 +66,56 @@
           "at": 0.62
         }
       ],
-      "furniture": []
+      "furniture": [
+        {
+          "item": "lit double",
+          "kind": "bed",
+          "rect": [
+            0.05,
+            0.84,
+            1.65,
+            2.88
+          ],
+          "h": 0.55,
+          "wall": "W"
+        },
+        {
+          "item": "chevet",
+          "kind": "nightstand",
+          "rect": [
+            0.05,
+            0.29,
+            0.55,
+            0.79
+          ],
+          "h": 0.5,
+          "wall": "W"
+        },
+        {
+          "item": "chevet",
+          "kind": "nightstand",
+          "rect": [
+            0.05,
+            2.93,
+            0.55,
+            3.43
+          ],
+          "h": 0.5,
+          "wall": "W"
+        },
+        {
+          "item": "armoire",
+          "kind": "wardrobe",
+          "rect": [
+            0.05,
+            1.54,
+            2.25,
+            2.19
+          ],
+          "h": 2.1,
+          "wall": "W"
+        }
+      ]
     },
     {
       "name": "BEDROOM 2",
@@ -42,7 +129,7 @@
       "doors": [
         {
           "wall": "E",
-          "at": 0.4
+          "at": 0.46
         }
       ],
       "windows": [
@@ -51,7 +138,56 @@
           "at": 0.5
         }
       ],
-      "furniture": []
+      "furniture": [
+        {
+          "item": "lit double",
+          "kind": "bed",
+          "rect": [
+            0.8,
+            3.77,
+            2.21,
+            5.82
+          ],
+          "h": 0.55,
+          "wall": "N"
+        },
+        {
+          "item": "chevet",
+          "kind": "nightstand",
+          "rect": [
+            0.25,
+            3.77,
+            0.75,
+            4.27
+          ],
+          "h": 0.5,
+          "wall": "N"
+        },
+        {
+          "item": "chevet",
+          "kind": "nightstand",
+          "rect": [
+            2.26,
+            3.77,
+            2.76,
+            4.27
+          ],
+          "h": 0.5,
+          "wall": "N"
+        },
+        {
+          "item": "armoire",
+          "kind": "wardrobe",
+          "rect": [
+            0.4,
+            3.77,
+            2.6,
+            4.42
+          ],
+          "h": 2.1,
+          "wall": "N"
+        }
+      ]
     },
     {
       "name": "BATHROOM",
@@ -65,25 +201,62 @@
       "doors": [
         {
           "wall": "S",
-          "at": 0.47
+          "at": 0.5
         }
       ],
       "windows": [],
-      "furniture": []
+      "furniture": [
+        {
+          "item": "baignoire",
+          "kind": "bathtub",
+          "rect": [
+            5.71,
+            0.05,
+            7.41,
+            0.83
+          ],
+          "h": 0.58,
+          "wall": "N"
+        },
+        {
+          "item": "vasque",
+          "kind": "vanity",
+          "rect": [
+            6.01,
+            0.05,
+            7.11,
+            0.55
+          ],
+          "h": 0.85,
+          "wall": "N"
+        },
+        {
+          "item": "wc",
+          "kind": "toilet",
+          "rect": [
+            6.36,
+            0.05,
+            6.76,
+            0.71
+          ],
+          "h": 0.78,
+          "wall": "N"
+        }
+      ]
     },
     {
       "name": "SHOWER ROOM",
       "area_m2": 2.55,
       "rect": [
         3.01,
-        5.89,
-        5.36,
+        5.82,
+        5.21,
         6.98
       ],
       "doors": [
         {
           "wall": "N",
-          "at": 0.85
+          "at": 0.5
         }
       ],
       "windows": [],
@@ -103,12 +276,37 @@
       ],
       "doors": [
         {
-          "wall": "W",
-          "at": 0.15
+          "wall": "N",
+          "at": 0.53
         }
       ],
       "windows": [],
-      "furniture": [],
+      "furniture": [
+        {
+          "item": "penderie",
+          "kind": "wardrobe",
+          "rect": [
+            7.75,
+            6.39,
+            9.82,
+            6.99
+          ],
+          "h": 2.2,
+          "wall": "S"
+        },
+        {
+          "item": "penderie",
+          "kind": "wardrobe",
+          "rect": [
+            7.66,
+            5.56,
+            9.13,
+            6.16
+          ],
+          "h": 2.2,
+          "wall": "W"
+        }
+      ],
       "_warn": [
         "insufficient data: need area + one side, or both sides"
       ]
@@ -125,7 +323,7 @@
       "doors": [
         {
           "wall": "W",
-          "at": 0.27
+          "at": 0.12
         }
       ],
       "windows": [
@@ -134,7 +332,32 @@
           "at": 0.5
         }
       ],
-      "furniture": []
+      "furniture": [
+        {
+          "item": "plan de travail",
+          "kind": "counter",
+          "rect": [
+            11.73,
+            5.33,
+            14.21,
+            5.95
+          ],
+          "h": 0.9,
+          "wall": "E"
+        },
+        {
+          "item": "réfrigérateur",
+          "kind": "fridge",
+          "rect": [
+            13.56,
+            5.3,
+            14.21,
+            5.98
+          ],
+          "h": 1.85,
+          "wall": "E"
+        }
+      ]
     },
     {
       "name": "LIVING ROOM",
@@ -148,7 +371,7 @@
       "doors": [
         {
           "wall": "S",
-          "at": 0.15
+          "at": 0.24
         }
       ],
       "windows": [
@@ -161,20 +384,63 @@
           "at": 0.5
         }
       ],
-      "furniture": []
+      "furniture": [
+        {
+          "item": "canapé",
+          "kind": "sofa",
+          "rect": [
+            7.81,
+            1.67,
+            10.11,
+            2.62
+          ],
+          "h": 0.75,
+          "wall": "W"
+        },
+        {
+          "item": "table basse",
+          "kind": "coffee",
+          "rect": [
+            9.71,
+            1.79,
+            10.81,
+            2.5
+          ],
+          "h": 0.35
+        },
+        {
+          "item": "meuble TV",
+          "kind": "tv",
+          "rect": [
+            12.41,
+            1.06,
+            14.21,
+            1.51
+          ],
+          "h": 0.5,
+          "wall": "E"
+        },
+        {
+          "item": "table à manger",
+          "kind": "dining",
+          "rect": [
+            10.16,
+            0.05,
+            11.86,
+            1.05
+          ],
+          "h": 0.75,
+          "wall": "N"
+        }
+      ]
     },
     {
       "name": "HALL",
       "area_m2": 8.76,
-      "rect": [
-        5.36,
-        3.09,
-        7.61,
-        6.98
+      "label_at": [
+        5.31,
+        5.25
       ],
-      "doors": [],
-      "windows": [],
-      "furniture": [],
       "_warn": [
         "insufficient data: need area + one side, or both sides"
       ]
@@ -184,18 +450,43 @@
       "area_m2": 1.87,
       "rect": [
         9.96,
-        4.3,
+        4.95,
         10.88,
-        7.04
+        6.98
       ],
       "doors": [
         {
-          "wall": "W",
-          "at": 0.27
+          "wall": "N",
+          "at": 0.5
         }
       ],
       "windows": [],
-      "furniture": [],
+      "furniture": [
+        {
+          "item": "wc",
+          "kind": "toilet",
+          "rect": [
+            10.21,
+            6.25,
+            10.63,
+            6.93
+          ],
+          "h": 0.78,
+          "wall": "S"
+        },
+        {
+          "item": "lave-mains",
+          "kind": "vanity",
+          "rect": [
+            10.17,
+            6.61,
+            10.67,
+            6.93
+          ],
+          "h": 0.85,
+          "wall": "S"
+        }
+      ],
       "_warn": [
         "insufficient data: need area + one side, or both sides"
       ]

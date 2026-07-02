@@ -244,7 +244,19 @@ def _near(v, grid, tol=0.15):
     return best
 
 
-def _candidates(r, dims, xs, ys, EW, ED):
+def _chain_spans(chains):
+    """Consecutive cumulative pairs of each printed chain = real wall-to-wall
+    bays. Area-only rooms may only span such a bay (kills fantasy spans)."""
+    sx, sy = set(), set()
+    for side, acc in (("TOP", sx), ("BOTTOM", sx), ("LEFT", sy), ("RIGHT", sy)):
+        c = 0.0
+        for v in chains.get(side, []):
+            acc.add((round(c, 2), round(c + v, 2)))
+            c += v
+    return sorted(sx), sorted(sy)
+
+
+def _candidates(r, dims, xs, ys, EW, ED, spans=None, anchors=None):
     """All placements of this room whose edges land on printed wall lines and
     whose size matches its known geometry (exact dims, or printed area with
     one grid span). The plan's own numbers generate the possibilities."""
@@ -270,34 +282,37 @@ def _candidates(r, dims, xs, ys, EW, ED):
             for ya, yb in yopts:
                 out.append((xa, ya, xb, yb))
     elif area:
-        for i, x0 in enumerate(xs):                       # x-span driven
-            for x1 in xs[i + 1:]:
-                sp = x1 - x0
-                if not 0.5 <= sp <= 9:
-                    continue
-                o = area / sp
-                if not 0.7 <= o <= 9 or max(sp, o) / min(sp, o) > 3.2:
-                    continue
-                for y0 in ys:
-                    if y0 + o <= ED + 0.1:
-                        out.append((x0, y0, x1, y0 + o))
-                for y1 in ys:
-                    if y1 - o >= -0.1:
-                        out.append((x0, y1 - o, x1, y1))
-        for i, y0 in enumerate(ys):                       # y-span driven
-            for y1 in ys[i + 1:]:
-                sp = y1 - y0
-                if not 0.5 <= sp <= 9:
-                    continue
-                o = area / sp
-                if not 0.7 <= o <= 9 or max(sp, o) / min(sp, o) > 3.2:
-                    continue
-                for x0 in xs:
-                    if x0 + o <= EW + 0.1:
-                        out.append((x0, y0, x0 + o, y1))
-                for x1 in xs:
-                    if x1 - o >= -0.1:
-                        out.append((x1 - o, y0, x1, y1))
+        # spans: only real chain bays (consecutive cumulative pairs);
+        # anchors: wall grid + edges of already-placed rooms (partitions)
+        spx, spy = spans if spans else ([], [])
+        ax = anchors[0] if anchors else xs
+        ay = anchors[1] if anchors else ys
+        for x0, x1 in spx:                                # x-span driven
+            sp = x1 - x0
+            if not 0.5 <= sp <= 9:
+                continue
+            o = area / sp
+            if not 0.7 <= o <= 9 or max(sp, o) / min(sp, o) > 3.2:
+                continue
+            for y0 in ay:
+                if y0 + o <= ED + 0.1:
+                    out.append((x0, y0, x1, y0 + o))
+            for y1 in ay:
+                if y1 - o >= -0.1:
+                    out.append((x0, y1 - o, x1, y1))
+        for y0, y1 in spy:                                # y-span driven
+            sp = y1 - y0
+            if not 0.5 <= sp <= 9:
+                continue
+            o = area / sp
+            if not 0.7 <= o <= 9 or max(sp, o) / min(sp, o) > 3.2:
+                continue
+            for x0 in ax:
+                if x0 + o <= EW + 0.1:
+                    out.append((x0, y0, x0 + o, y1))
+            for x1 in ax:
+                if x1 - o >= -0.1:
+                    out.append((x1 - o, y0, x1, y1))
     seen, uniq = set(), []
     for c in out:
         k = tuple(round(v, 2) for v in c)
@@ -307,16 +322,18 @@ def _candidates(r, dims, xs, ys, EW, ED):
     return uniq
 
 
-def _tile(solved, xs, ys, EW, ED, flip):
-    """Pick one candidate per room so that rooms never overlap, staying as
-    close as possible to the vision bboxes (which only break ties — positions
-    come from the printed grid). Exhaustive search with pruning; room counts
-    are tiny. Returns {"n": placed, "dev": Σdist², "asg": {name: rect}}."""
+def _tile(solved, xs, ys, EW, ED, flip, fixed=(), spans=None, anchors=None,
+          lrange=None):
+    """Pick one candidate per room so that rooms never overlap (nor overlap
+    the `fixed` rects), staying as close as possible to the vision hints —
+    positions come from the printed grid. Exhaustive search with pruning."""
     # normalise label coordinates: they are fractions of the FULL IMAGE
     # (margins + dimension bands included) → map their min..max spread onto
     # the building interior so the systematic offset cancels out
-    lxs = [r["label"][0] for r, _, _ in solved if r.get("label")]
-    lys = [r["label"][1] for r, _, _ in solved if r.get("label")]
+    lxs = lrange[0] if lrange else \
+        [r["label"][0] for r, _, _ in solved if r.get("label")]
+    lys = lrange[1] if lrange else \
+        [r["label"][1] for r, _, _ in solved if r.get("label")]
     _norm = _norm_static
 
     items = []
@@ -326,7 +343,7 @@ def _tile(solved, xs, ys, EW, ED, flip):
         if not (dims["w_m"] and dims["d_m"]) \
                 and not r["bbox"] and not r.get("label"):
             continue
-        cands = _candidates(r, dims, xs, ys, EW, ED)
+        cands = _candidates(r, dims, xs, ys, EW, ED, spans, anchors)
         if not cands:
             continue
         # position hint: the printed room-name position (a dedicated, reliable
@@ -379,7 +396,8 @@ def _tile(solved, xs, ys, EW, ED, flip):
             return
         name, scored = items[i]
         for c, s in scored:
-            if any(_overlap(c, p) > 0.05 for p in asg.values()):
+            if any(_overlap(c, p) > 0.05 for p in asg.values()) or \
+               any(_overlap(c, p) > 0.05 for p in fixed):
                 continue
             asg[name] = c
             bt(i + 1, asg, dev + s)
@@ -419,19 +437,28 @@ def _fix_openings(rooms_by_name, rects, EW, ED, hall_pt, circ_cells,
                 "W": x0 <= hull_tol, "E": x1 >= EW - hull_tol}[wall]
 
     def contact(wall, seg):
-        """Length of this wall shared with a circulation cell face."""
+        """(total length, centre-t of the widest run) of this wall shared
+        with a circulation cell face."""
         ax, ay, bx, by = seg
-        total = 0.0
+        wl = max(abs(bx - ax), abs(by - ay)) or 1.0
+        total, best = 0.0, None
         for cx0, cy0, cx1, cy1 in circ_cells:
-            if wall == "N" and abs(cy1 - ay) < 0.03:
-                total += max(0.0, min(bx, cx1) - max(ax, cx0))
-            elif wall == "S" and abs(cy0 - ay) < 0.03:
-                total += max(0.0, min(bx, cx1) - max(ax, cx0))
-            elif wall == "W" and abs(cx1 - ax) < 0.03:
-                total += max(0.0, min(by, cy1) - max(ay, cy0))
-            elif wall == "E" and abs(cx0 - ax) < 0.03:
-                total += max(0.0, min(by, cy1) - max(ay, cy0))
-        return total
+            ov = 0.0; mid_t = None
+            if wall in ("N", "S") and abs((cy1 if wall == "N" else cy0)
+                                          - ay) < 0.03:
+                lo, hi = max(ax, cx0), min(bx, cx1)
+                if hi > lo:
+                    ov = hi - lo; mid_t = ((lo + hi) / 2 - ax) / wl
+            elif wall in ("W", "E") and abs((cx1 if wall == "W" else cx0)
+                                            - ax) < 0.03:
+                lo, hi = max(ay, cy0), min(by, cy1)
+                if hi > lo:
+                    ov = hi - lo; mid_t = ((lo + hi) / 2 - ay) / wl
+            if ov > 0:
+                total += ov
+                if best is None or ov > best[0]:
+                    best = (ov, mid_t)
+        return total, (best[1] if best else None)
 
     def nearest_t(seg):
         ax, ay, bx, by = seg
@@ -447,18 +474,21 @@ def _fix_openings(rooms_by_name, rects, EW, ED, hall_pt, circ_cells,
         if _is_circ(name):
             r["doors"], r["windows"] = [], []
             continue
-        # door: interior wall — max circulation contact, else nearest to hall
+        # door: interior wall — max circulation contact (door sits at the
+        # centre of the widest shared run), else nearest point to the hall
         best = None
         for wall, seg in _edges(rc).items():
             if is_ext(wall, rc):
                 continue
+            tot, mid = contact(wall, seg)
             t, dist = nearest_t(seg)
-            key = (-round(contact(wall, seg), 2), dist)
+            at = mid if (tot > 0.25 and mid is not None) else t
+            key = (-round(tot, 2), dist)
             if best is None or key < best[0]:
-                best = (key, wall, t)
+                best = (key, wall, at)
         if best:
             r["doors"] = [{"wall": best[1],
-                           "at": round(max(0.15, min(0.85, best[2])), 2)}]
+                           "at": round(max(0.12, min(0.88, best[2])), 2)}]
         # windows: exterior walls only, one per wall (mean position)
         by_wall = {}
         for o in r.get("windows", []):
@@ -520,6 +550,158 @@ def _touches(a, b, min_len=0.4):
     return False
 
 
+# ── deterministic auto-furnishing ────────────────────────────────────────────
+# Architectural placement rules per room type. Everything anchored on "quiet"
+# walls (no door, then no window), door clearance respected. Furniture is DATA
+# (goes into plan.json) so the editor/renderers stay dumb.
+
+def _room_kind(name):
+    n = name.upper()
+    if "BED" in n or "CHAMBRE" in n:
+        return "bedroom"
+    if "LIVING" in n or "SEJOUR" in n or "SÉJOUR" in n or "SALON" in n:
+        return "living"
+    if "KITCHEN" in n or "CUISINE" in n:
+        return "kitchen"
+    if "BATH" in n or "S.D.B" in n or "SDB" in n or "BAIN" in n:
+        return "bathroom"
+    if "SHOWER" in n or "DOUCHE" in n:
+        return "shower"
+    if n.strip() == "WC" or "TOILET" in n:
+        return "wc"
+    if "CHANGING" in n or "DRESSING" in n or "CELLIER" in n:
+        return "changing"
+    return "other"
+
+
+def _furnish(rooms_by_name, rects):
+    for name, rc in rects.items():
+        r = rooms_by_name.get(name)
+        if r is None or _is_circ(name) or r.get("furniture"):
+            continue
+        x0, y0, x1, y1 = rc
+        w, d = x1 - x0, y1 - y0
+        door = None
+        for o in r.get("doors", []):
+            ax, ay, bx, by = _edges(rc)[o["wall"]]
+            door = (ax + (bx - ax) * o["at"], ay + (by - ay) * o["at"])
+        win_walls = {o["wall"] for o in r.get("windows", [])}
+        door_walls = {o["wall"] for o in r.get("doors", [])}
+
+        def clear_of_door(fr, m=0.75):
+            if not door:
+                return True
+            dx = max(fr[0] - door[0], 0, door[0] - fr[2])
+            dy = max(fr[1] - door[1], 0, door[1] - fr[3])
+            return (dx * dx + dy * dy) ** 0.5 >= m
+
+        def against(wall, fw, fd, off=0.05, at=0.5):
+            """Rect of size fw (along wall) × fd (into room) against a wall."""
+            if wall in ("N", "S"):
+                cx = x0 + at * w
+                fx0 = min(max(cx - fw / 2, x0 + 0.05), x1 - fw - 0.05)
+                if wall == "N":
+                    return [fx0, y0 + off, fx0 + fw, y0 + off + fd]
+                return [fx0, y1 - off - fd, fx0 + fw, y1 - off]
+            cy = y0 + at * d
+            fy0 = min(max(cy - fd / 2, y0 + 0.05), y1 - fd - 0.05)
+            if wall == "W":
+                return [x0 + off, fy0, x0 + off + fw, fy0 + fd]
+            return [x1 - off - fw, fy0, x1 - off, fy0 + fd]
+
+        def quiet_walls():
+            walls = ["N", "S", "W", "E"]
+            return sorted(walls, key=lambda wl: (wl in door_walls) * 2
+                          + (wl in win_walls))
+
+        def place(kind, item, wall, fw, fd, h, at=0.5):
+            # size along wall must fit
+            span = w if wall in ("N", "S") else d
+            if fw > span - 0.2:
+                fw = span - 0.2
+            if fw <= 0.2:
+                return None
+            fr = against(wall, fw, fd, at=at)
+            if not clear_of_door(fr):
+                return None
+            fr = [round(v, 2) for v in fr]
+            furn.append({"item": item, "kind": kind, "rect": fr, "h": h,
+                         "wall": wall})
+            return fr
+
+        def place_any(kind, item, fw, fd, h, walls=None):
+            for wl in (walls or quiet_walls()):
+                if place(kind, item, wl, fw, fd, h):
+                    return True
+            return False
+
+        furn = []
+        kind = _room_kind(name)
+        if kind == "bedroom":
+            bw = 1.6 if w * d >= 14 else 1.4
+            for wl in quiet_walls():
+                fr = place("bed", "lit double", wl, bw, 2.05, 0.55)
+                if fr:
+                    # nightstands flanking the bed head
+                    if wl in ("N", "S"):
+                        for sx in (fr[0] - 0.55, fr[2] + 0.05):
+                            if x0 + 0.05 <= sx and sx + 0.5 <= x1 - 0.05:
+                                yb = fr[1] if wl == "N" else fr[3] - 0.5
+                                furn.append({"item": "chevet", "kind": "nightstand",
+                                             "rect": [round(sx, 2), round(yb, 2),
+                                                      round(sx + 0.5, 2), round(yb + 0.5, 2)],
+                                             "h": 0.5, "wall": wl})
+                    else:
+                        for sy in (fr[1] - 0.55, fr[3] + 0.05):
+                            if y0 + 0.05 <= sy and sy + 0.5 <= y1 - 0.05:
+                                xb = fr[0] if wl == "W" else fr[2] - 0.5
+                                furn.append({"item": "chevet", "kind": "nightstand",
+                                             "rect": [round(xb, 2), round(sy, 2),
+                                                      round(xb + 0.5, 2), round(sy + 0.5, 2)],
+                                             "h": 0.5, "wall": wl})
+                    break
+            place_any("wardrobe", "armoire", 2.2, 0.65, 2.1)
+        elif kind == "living":
+            main_win = next(iter(win_walls), "N")
+            opp = {"N": "S", "S": "N", "W": "E", "E": "W"}[main_win]
+            fr = place("sofa", "canapé", opp, 2.3, 0.95, 0.75)
+            if fr:
+                # coffee table in front of the sofa (toward the window)
+                cx, cy = (fr[0] + fr[2]) / 2, (fr[1] + fr[3]) / 2
+                dx, dy = {"N": (0, 1), "S": (0, -1), "W": (1, 0), "E": (-1, 0)}[opp]
+                furn.append({"item": "table basse", "kind": "coffee",
+                             "rect": [round(cx - 0.55 + dx * 1.3, 2), round(cy - 0.35 + dy * 1.3, 2),
+                                      round(cx + 0.55 + dx * 1.3, 2), round(cy + 0.35 + dy * 1.3, 2)],
+                             "h": 0.35})
+            place("tv", "meuble TV", main_win, 1.8, 0.45, 0.5, at=0.3)
+            # dining set toward the secondary window / far third
+            at2 = 0.8 if w >= d else 0.5
+            place_any("dining", "table à manger", 1.7, 1.0, 0.75,
+                      walls=[wl for wl in quiet_walls() if wl != opp])
+        elif kind == "kitchen":
+            place_any("counter", "plan de travail", max(w, d) - 0.3, 0.62, 0.9)
+            place_any("fridge", "réfrigérateur", 0.65, 0.68, 1.85,
+                      walls=[x for x in quiet_walls()[1:]])
+        elif kind == "bathroom":
+            place_any("bathtub", "baignoire", 1.7, 0.78, 0.58)
+            place_any("vanity", "vasque", 1.1, 0.5, 0.85)
+            if w * d >= 5:
+                place_any("toilet", "wc", 0.4, 0.66, 0.78)
+        elif kind == "shower":
+            walls = [wl for wl in quiet_walls()]
+            place_any("shower", "douche", 0.95, 0.95, 0.15, walls=walls)
+            place_any("vanity", "lave-mains", 0.7, 0.42, 0.85)
+        elif kind == "wc":
+            place_any("toilet", "wc", 0.42, 0.68, 0.78)
+            place_any("vanity", "lave-mains", 0.5, 0.32, 0.85)
+        elif kind == "changing":
+            qws = quiet_walls()
+            place("wardrobe", "penderie", qws[0], max(w, d) - 0.3, 0.6, 2.2)
+            if len(qws) > 1:
+                place("wardrobe", "penderie", qws[1], max(w, d) - 0.9, 0.6, 2.2)
+        r["furniture"] = furn
+
+
 def build_plan(facts, project="plan"):
     xs, ys = _wall_grid(facts.get("chains", {}))
     # envelope: computed from chains when available (never trust the model's sum)
@@ -555,54 +737,81 @@ def build_plan(facts, project="plan"):
         dims, warns = solve_room(f)
         solved.append((r, dims, warns))
 
-    # bbox y-orientation is unreliable (some models emit CAD y-up): tile both
-    # ways; keep the one placing more rooms, then the one closer to the bboxes
-    ta = _tile(solved, xs, ys, EW, ED, flip=False)
-    tb = _tile(solved, xs, ys, EW, ED, flip=True)
+    # circulation rooms (hall, corridors) are NOT tiled: a hall is rarely a
+    # rectangle — it IS the leftover space between the rooms
+    tileable = [(r, d, w) for r, d, w in solved if not _is_circ(r["name"])]
+    exact = [(r, d, w) for r, d, w in tileable if d["w_m"] and d["d_m"]]
+    areaonly = [(r, d, w) for r, d, w in tileable
+                if not (d["w_m"] and d["d_m"]) and r["area"]]
+    lxs = [r["label"][0] for r, _, _ in solved if r.get("label")] or [0, 1]
+    lys = [r["label"][1] for r, _, _ in solved if r.get("label")] or [0, 1]
+    lrange = (lxs, lys)
+
+    # phase 1 — exact-dims rooms on the printed chain grid (try both bbox
+    # orientations; labels are never flipped)
+    ta = _tile(exact, xs, ys, EW, ED, flip=False, lrange=lrange)
+    tb = _tile(exact, xs, ys, EW, ED, flip=True, lrange=lrange)
     pick = tb if (tb["n"], -tb["dev"]) > (ta["n"], -ta["dev"]) else ta
-    if pick is tb:
+    flip = pick is tb
+    if flip:
         print("· bbox orientation: y-flip detected")
     rects = {k: [round(v, 2) for v in c] for k, c in pick["asg"].items()}
-    print(f"· tiling: {pick['n']} rooms locked on the printed wall grid")
+
+    # phase 2 — area-only rooms: spans = real chain bays, anchors = wall grid
+    # + the partitions of the rooms already placed
+    spans = _chain_spans(facts.get("chains", {}))
+    ax = sorted({*xs, *[v for rc in rects.values() for v in (rc[0], rc[2])]})
+    ay = sorted({*ys, *[v for rc in rects.values() for v in (rc[1], rc[3])]})
+    t2 = _tile(areaonly, xs, ys, EW, ED, flip=flip,
+               fixed=list(rects.values()), spans=spans, anchors=(ax, ay),
+               lrange=lrange)
+    for k, c in t2["asg"].items():
+        rects[k] = [round(v, 2) for v in c]
+    print(f"· tiling: {len(rects)} rooms locked "
+          f"({pick['n']} exact + {t2['n']} by area/bay)")
 
     rooms_by_name = {r["name"]: r for r, _, _ in solved}
-    hall_rect, hall_pt = None, (EW / 2, ED / 2)
-    for name, rc in rects.items():
-        if _is_circ(name):
-            hall_rect = rc
-            hall_pt = ((rc[0] + rc[2]) / 2, (rc[1] + rc[3]) / 2)
-            break
 
-    # normalized label points of rooms that did NOT get placed — a gap that
-    # sits next to such a label IS that room (vision saw the name but not
-    # usable dims; geometry fills the rest)
-    lxs = [r["label"][0] for r, _, _ in solved if r.get("label")]
-    lys = [r["label"][1] for r, _, _ in solved if r.get("label")]
-    unplaced_lbl = {}
-    for r, _, _ in solved:
-        if r["name"] not in rects and r.get("label") and not _is_circ(r["name"]):
-            unplaced_lbl[r["name"]] = (
-                _norm_static(r["label"][0], min(lxs), max(lxs)) * EW,
+    # ── circulation = the leftover cells, flood-filled from the hall label ──
+    def _lblpt(r):
+        return (_norm_static(r["label"][0], min(lxs), max(lxs)) * EW,
                 _norm_static(r["label"][1], min(lys), max(lys)) * ED)
 
-    # unfilled cells: hall-adjacent ones ARE the circulation (halls are rarely
-    # rectangular); isolated room-sized ones = rooms the vision missed
-    circ_cells = [hall_rect] if hall_rect else []
-    gi = 0
-    for g in _gap_fill(rects, EW, ED):
-        w, d = g[2] - g[0], g[3] - g[1]
-        roomlike = (w >= 0.6 and d >= 0.6 and w * d >= 1.0
-                    and max(w, d) / min(w, d) <= 3.2)
-        if hall_rect is not None and _touches(g, hall_rect):
-            circ_cells.append(g)          # arm of the hall, not a room
-            continue
-        if not roomlike:
-            # a sliver aligned with the full width/height of an adjacent room
-            # is that room's missing strip (misread area) → absorb it
+    seeds = [_lblpt(r) for r, _, _ in solved
+             if _is_circ(r["name"]) and r.get("label")] or [(EW / 2, ED / 2)]
+
+    def classify(rects_in):
+        """PURE geometry pass: leftover cells → (rects', circ, room-gaps,
+        logs). Replayable, so the reachability loop can test configurations."""
+        r2 = {k: list(v) for k, v in rects_in.items()}
+        raw = _gap_fill(r2, EW, ED)
+        # wall-thickness residue (<18 cm) is never walkable — keep it out of
+        # the circulation flood, it only gets absorbed or dropped
+        pool = [g for g in raw if min(g[2] - g[0], g[3] - g[1]) >= 0.12]
+        arts = [g for g in raw if min(g[2] - g[0], g[3] - g[1]) < 0.12]
+        cc = []
+        for g in pool[:]:
+            if any(g[0] - 0.6 <= sx <= g[2] + 0.6 and
+                   g[1] - 0.6 <= sy <= g[3] + 0.6 for sx, sy in seeds):
+                cc.append(g); pool.remove(g)
+        grow = True
+        while grow:
+            grow = False
+            for g in pool[:]:
+                if any(_touches(g, c, 0.25) for c in cc):
+                    cc.append(g); pool.remove(g); grow = True
+        pool += arts
+        logs, gaps_rooms = [], []
+        for g in pool:
+            w, d = g[2] - g[0], g[3] - g[1]
+            roomlike = (w >= 0.6 and d >= 0.6 and w * d >= 1.0
+                        and max(w, d) / min(w, d) <= 3.2)
+            if roomlike:
+                gaps_rooms.append(g)
+                continue
+            artifact = min(w, d) < 0.12   # wall-thickness residue, NOT walkable
             absorbed = False
-            for nm2, rc2 in rects.items():
-                if _is_circ(nm2):
-                    continue
+            for nm2, rc2 in r2.items():
                 same_x = abs(g[0] - rc2[0]) < 0.05 and abs(g[2] - rc2[2]) < 0.05
                 same_y = abs(g[1] - rc2[1]) < 0.05 and abs(g[3] - rc2[3]) < 0.05
                 if same_x and (abs(g[1] - rc2[3]) < 0.05 or abs(g[3] - rc2[1]) < 0.05):
@@ -611,14 +820,90 @@ def build_plan(facts, project="plan"):
                     rc2[0], rc2[2] = min(rc2[0], g[0]), max(rc2[2], g[2])
                 else:
                     continue
-                print(f"· sliver {g} absorbé par {nm2}")
+                logs.append(f"· sliver {g} absorbé par {nm2}")
                 absorbed = True
                 break
-            if not absorbed:
-                circ_cells.append(g)      # corridor sliver
-            continue
+            if not absorbed and not artifact:
+                cc.append(g)              # orphan sliver → walkable
+        return r2, cc, gaps_rooms, logs
+
+    def _max_contact(rc, cc):
+        best = 0.0
+        for wall, seg in _edges(rc).items():
+            ax, ay, bx, by = seg
+            for cx0, cy0, cx1, cy1 in cc:
+                if wall in ("N", "S") and abs(
+                        (cy1 if wall == "N" else cy0) - ay) < 0.03:
+                    best = max(best, min(bx, cx1) - max(ax, cx0))
+                elif wall in ("W", "E") and abs(
+                        (cx1 if wall == "W" else cx0) - ax) < 0.03:
+                    best = max(best, min(by, cy1) - max(ay, cy0))
+        return best
+
+    def sealed_room(r2, cc, gaps_rooms):
+        for nm2, rc2 in r2.items():
+            if _max_contact(rc2, cc) < 0.3:
+                return nm2
+        for g in gaps_rooms:
+            if _max_contact(g, cc) < 0.3:
+                return f"gap{g}"
+        return None
+
+    # architectural axiom: every room reachable from the circulation. A sealed
+    # room means an area-only room plugs a corridor throat → move the blocker.
+    def _rectdist(a, b):
+        dx = max(a[0] - b[2], 0, b[0] - a[2])
+        dy = max(a[1] - b[3], 0, b[1] - a[3])
+        return (dx * dx + dy * dy) ** 0.5
+
+    cfg = classify(rects)
+    bad = sealed_room(*cfg[:3])
+    if bad and bad in rects:
+        print(f"· ⚠ {bad} enclavée — repositionnement d'un bloqueur…")
+        fixed_ok = False
+        # blockers adjacent to the sealed room first — they plug its throat
+        order = sorted((it for it in areaonly if it[0]["name"] in rects),
+                       key=lambda it: _rectdist(rects[it[0]["name"]],
+                                                rects[bad]))
+        for r, dims, _ in order:
+            nm2 = r["name"]
+            if fixed_ok:
+                break
+            others = {k: v for k, v in rects.items() if k != nm2}
+            lpt = _lblpt(r) if r.get("label") else None
+            oc = rects[nm2]
+            odist = (((oc[0] + oc[2]) / 2 - lpt[0]) ** 2 +
+                     ((oc[1] + oc[3]) / 2 - lpt[1]) ** 2) ** 0.5 if lpt else 0
+            for cand in _candidates(r, dims, xs, ys, EW, ED, spans, (ax, ay)):
+                if any(_overlap(cand, p) > 0.05 for p in others.values()):
+                    continue
+                if lpt:  # a fix must not exile the room from its printed name
+                    nd = (((cand[0] + cand[2]) / 2 - lpt[0]) ** 2 +
+                          ((cand[1] + cand[3]) / 2 - lpt[1]) ** 2) ** 0.5
+                    if nd > odist + 1.0:
+                        continue
+                trial = dict(others)
+                trial[nm2] = [round(v, 2) for v in cand]
+                tcfg = classify(trial)
+                if sealed_room(*tcfg[:3]) is None:
+                    rects, cfg, fixed_ok = trial, tcfg, True
+                    print(f"·   {nm2} déplacée → {trial[nm2]}")
+                    break
+        if not fixed_ok:
+            print("·   aucun repositionnement ne débloque — configuration gardée")
+
+    rects, circ, gaps_rooms, clogs = cfg
+    for ln in clogs:
+        print(ln)
+
+    # room-sized gaps: adopt a label-only room (e.g. the WC), else PIECE ?
+    unplaced_lbl = {r["name"]: _lblpt(r) for r, _, _ in solved
+                    if r["name"] not in rects and r.get("label")
+                    and not _is_circ(r["name"])}
+    gi = 0
+    for g in gaps_rooms:
+        w, d = g[2] - g[0], g[3] - g[1]
         area = round(w * d, 2)
-        # adopt the nearest unplaced label (e.g. a WC seen by name only)
         nm = None
         for cand, (px, py) in list(unplaced_lbl.items()):
             dx = max(g[0] - px, 0, px - g[2])
@@ -647,10 +932,25 @@ def build_plan(facts, project="plan"):
         rects[nm] = g
         print(f"· gap → {nm}: {g} ({area} m²)")
 
+    circ_cells = [[round(v, 2) for v in c] for c in circ]
+    hall_pt = (EW / 2, ED / 2)
+    if circ_cells:
+        big = max(circ_cells, key=lambda c: (c[2] - c[0]) * (c[3] - c[1]))
+        hall_pt = ((big[0] + big[2]) / 2, (big[1] + big[3]) / 2)
+    # circulation rooms keep a label position on the biggest cell
+    for r, _, _ in solved:
+        if _is_circ(r["name"]):
+            r["label_at"] = [round(hall_pt[0], 2), round(hall_pt[1], 2)]
+
     # deterministic openings (doors toward the circulation, windows on hull)
     _fix_openings(rooms_by_name, rects, EW, ED, hall_pt, circ_cells)
     print(f"· openings: doors re-aimed at the circulation, "
           f"windows filtered to the hull ({len(circ_cells)} circ cells)")
+
+    # deterministic furnishing per room type (data → editable in plan.json)
+    _furnish(rooms_by_name, rects)
+    nfurn = sum(len(r.get("furniture", [])) for r in rooms_by_name.values())
+    print(f"· furnishing: {nfurn} pieces placed on quiet walls")
 
     rooms_out = []
     for r, dims, warns in solved:
@@ -659,10 +959,10 @@ def build_plan(facts, project="plan"):
             entry["rect"] = rects[r["name"]]
             entry["doors"] = r["doors"]
             entry["windows"] = r["windows"]
-            entry["furniture"] = []
-        else:  # circulation / unresolved → label only, centred on bbox or plan
+            entry["furniture"] = r.get("furniture", [])
+        else:  # circulation / unresolved → label only
             bb = r["bbox"]
-            entry["label_at"] = (
+            entry["label_at"] = r.get("label_at") or (
                 [round((bb[0] + bb[2]) / 2 * EW, 2), round((bb[1] + bb[3]) / 2 * ED, 2)]
                 if bb else [round(EW / 2, 2), round(ED / 2, 2)])
         if warns:
@@ -670,6 +970,7 @@ def build_plan(facts, project="plan"):
         rooms_out.append(entry)
 
     return {"project": project, "units": "m", "wall_height": 2.5,
+            "circulation": circ_cells,
             "envelope": [EW, ED], "rooms": rooms_out}
 
 
