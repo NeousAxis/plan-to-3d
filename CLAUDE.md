@@ -45,7 +45,26 @@ Le plan maison (`work/_plan/plan_user.png`) n'a **AUCUNE surface ni cote imprim�
 - KITCHEN : rect 10.88→14.26 (3.38 m) vs cote **3.05** (devrait finir ~13.93, écart = murs).
 → Se corrige en éditant **UN SEUL fichier** (`web/plans/apartment_2br.json`) maintenant.
 
+### 🎯 NOUVELLE STRATÉGIE LECTURE (actée avec l'user, 2026-07-02 fin de session)
+L'user a raison : des **modèles spécialisés** (CubiCasa5K-style) font le spatial en secondes là où
+le LLM vision généraliste galère. Architecture cible à 3 étages :
+- **Spatial** → modèle spécialisé. **VALIDÉ** : le Space HF public `Viraj2307/Floor-Plan-Detection`
+  détecte sur le plan user **9 pièces, 10 portes (dont le WC en-suite !), 4 fenêtres aux bons murs**
+  en secondes (`plan_seg.py detect`). Overlays de preuve : `work/_seg/detect_{0,1}.png`.
+- **Métrique** → notre solveur chaînes (échelle exacte + cross-check surfaces) — les modèles de
+  segmentation sortent des pixels, pas des mètres. Les deux se complètent.
+- **Fallback** → heuristiques actuelles de plan_reader + éditeur.
+**Bloqueur d'intégration** : le Space renvoie des IMAGES annotées, pas des coordonnées.
+L'extraction des cadres rouges (composantes connexes, `plan_seg.red_boxes`) ne récupère que ~80 %
+(les cadres qui se touchent fusionnent) ; `red_rects` (appariement de segments) est buggé.
+**La solution propre = déployer NOTRE Space HF** (gratuit) qui exécute le même modèle et renvoie
+du JSON brut (le repo CubiCasa5k est open source, le Space Viraj est forkable). Nécessite un token
+HF write. **C'est LA première tâche de la prochaine session.** Ne PAS brancher les données
+bruitées de l'extraction d'overlays dans plan_reader — le plan actuel est enfin juste.
+
 ### 👉 REPRENDRE PAR ICI
+0. **Déployer le Space de segmentation JSON** (voir 🎯 ci-dessus) puis brancher dans plan_reader :
+   bboxes pièces → hints du paveur ; portes/fenêtres → remplacent les heuristiques (fallback gardé).
 1. ~~Lecture AUTO du raster → plan.json~~ ✅ **FAIT — 9/9 pièces (WC compris) bien placées**
    sur le plan réel. Commande unique : `python3 plan_reader.py read "work/_plan/Plan appartement.jpg"
    -o web/plans/appart_auto.json` (~4 appels quota CF : N passes + labels + complétude).
