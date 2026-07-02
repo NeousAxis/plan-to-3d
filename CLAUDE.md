@@ -46,11 +46,17 @@ Le plan maison (`work/_plan/plan_user.png`) n'a **AUCUNE surface ni cote imprim�
 → Se corrige en éditant **UN SEUL fichier** (`web/plans/apartment_2br.json`) maintenant.
 
 ### 👉 REPRENDRE PAR ICI
-1. ~~Lecture AUTO du raster → plan.json~~ ✅ **FAIT ET RÉUSSI sur le plan réel de l'user**
-   (8/8 pièces bien placées). Commande : `python3 plan_reader.py read "work/_plan/Plan appartement.jpg"
-   -o web/plans/appart_auto.json` (~3 appels de quota CF). Restes connus de la lecture auto :
-   **WC manqué** par la vision (pièce minuscule, 3 passes), **portes/fenêtres `at` peu fiables**
-   (le point faible vision), bathroom d=2.26 vs 2.38 réel, HALL approximé en rectangle.
+1. ~~Lecture AUTO du raster → plan.json~~ ✅ **FAIT — 9/9 pièces (WC compris) bien placées**
+   sur le plan réel. Commande unique : `python3 plan_reader.py read "work/_plan/Plan appartement.jpg"
+   -o web/plans/appart_auto.json` (~4 appels quota CF : N passes + labels + complétude).
+   Mécanismes clés (tous déterministes, la vision ne fait que LIRE) :
+   corroboration des cotes par les chaînes (bathroom 2.26→2.38) · pénalité de taille dans le
+   pavage (kitchen exacte) · portes = mur intérieur à contact max avec la circulation ·
+   fenêtres filtrées au hull (1/mur) · gaps → pièce manquée (adoption du label le plus proche,
+   ex. WC) ou bras du hall · slivers absorbés par la pièce alignée.
+   **Restes honnêtes** : fenêtre BEDROOM 1 lue N (réel W) et KITCHEN S (réel E) — faiblesse
+   vision non corrigeable sans pixels ; portes CHANGING/KITCHEN/WC posées au coin adjacent
+   (~70 cm du réel). → se corrigent dans l'éditeur (brique suivante).
 2. **Édition dans cad.html** (drag murs/portes, éditer cotes, ajouter une pièce) → sauver le JSON →
    corrige les restes de lecture EN UI → ARES-lite complet. **C'est la prochaine brique.**
 3. Puis : mobilier auto (vision), export DXF du plan auto, re-brancher plan_to_image (habillage FLUX).

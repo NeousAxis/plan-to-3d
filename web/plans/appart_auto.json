@@ -18,26 +18,14 @@
       ],
       "doors": [
         {
-          "wall": "W",
-          "at": 0.0
-        },
-        {
-          "wall": "E",
-          "at": 0.5
+          "wall": "S",
+          "at": 0.85
         }
       ],
       "windows": [
         {
           "wall": "N",
-          "at": 0.5
-        },
-        {
-          "wall": "E",
-          "at": 0.5
-        },
-        {
-          "wall": "N",
-          "at": 0.75
+          "at": 0.62
         }
       ],
       "furniture": []
@@ -53,21 +41,13 @@
       ],
       "doors": [
         {
-          "wall": "W",
-          "at": 0.0
-        },
-        {
           "wall": "E",
-          "at": 0.5
+          "at": 0.4
         }
       ],
       "windows": [
         {
-          "wall": "N",
-          "at": 0.5
-        },
-        {
-          "wall": "E",
+          "wall": "W",
           "at": 0.5
         }
       ],
@@ -80,16 +60,12 @@
         5.36,
         0.0,
         7.76,
-        2.26
+        2.38
       ],
       "doors": [
         {
-          "wall": "W",
-          "at": 0.0
-        },
-        {
-          "wall": "W",
-          "at": 0.5
+          "wall": "S",
+          "at": 0.47
         }
       ],
       "windows": [],
@@ -106,12 +82,8 @@
       ],
       "doors": [
         {
-          "wall": "W",
-          "at": 0.0
-        },
-        {
-          "wall": "E",
-          "at": 0.5
+          "wall": "N",
+          "at": 0.85
         }
       ],
       "windows": [],
@@ -132,11 +104,7 @@
       "doors": [
         {
           "wall": "W",
-          "at": 0.0
-        },
-        {
-          "wall": "W",
-          "at": 0.5
+          "at": 0.15
         }
       ],
       "windows": [],
@@ -151,20 +119,21 @@
       "rect": [
         10.88,
         4.3,
-        13.93,
-        7.04
+        14.26,
+        6.98
       ],
       "doors": [
         {
           "wall": "W",
-          "at": 0.0
-        },
+          "at": 0.27
+        }
+      ],
+      "windows": [
         {
-          "wall": "W",
+          "wall": "S",
           "at": 0.5
         }
       ],
-      "windows": [],
       "furniture": []
     },
     {
@@ -178,12 +147,8 @@
       ],
       "doors": [
         {
-          "wall": "W",
-          "at": 0.0
-        },
-        {
-          "wall": "W",
-          "at": 0.5
+          "wall": "S",
+          "at": 0.15
         }
       ],
       "windows": [
@@ -194,14 +159,6 @@
         {
           "wall": "E",
           "at": 0.5
-        },
-        {
-          "wall": "N",
-          "at": 0.25
-        },
-        {
-          "wall": "N",
-          "at": 0.75
         }
       ],
       "furniture": []
@@ -215,18 +172,26 @@
         7.61,
         6.98
       ],
+      "doors": [],
+      "windows": [],
+      "furniture": [],
+      "_warn": [
+        "insufficient data: need area + one side, or both sides"
+      ]
+    },
+    {
+      "name": "WC",
+      "area_m2": 1.87,
+      "rect": [
+        9.96,
+        4.3,
+        10.88,
+        7.04
+      ],
       "doors": [
         {
           "wall": "W",
-          "at": 0.0
-        },
-        {
-          "wall": "E",
-          "at": 0.5
-        },
-        {
-          "wall": "W",
-          "at": 0.5
+          "at": 0.27
         }
       ],
       "windows": [],

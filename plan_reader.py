@@ -86,12 +86,30 @@ full image, x from the LEFT edge, y from the TOP edge (y=0 is the TOP).
 Room names exactly as printed. Numbers with 2 decimals.
 """
 
+def completeness_prompt(names):
+    """Third focused pass: hunt for rooms the main passes missed (tiny rooms
+    like WC are dropped surprisingly often)."""
+    return f"""\
+You are reading an architectural floor plan image. These rooms were already
+identified: {", ".join(sorted(names))}.
+Search the plan carefully for any OTHER labelled room that is NOT in this
+list — especially SMALL rooms: WC, toilet, storage, cellier, placard, pantry.
+For each missed room output ONLY these lines (nothing else):
+
+ROOM: <NAME> | area <m2_printed_or_-> | bbox -
+LABEL: <NAME> | <x>,<y>
+
+LABEL x,y = centre of the room's printed name as fractions (0..1) of the full
+image, y=0 at the TOP. If no room was missed, output exactly: NONE
+"""
+
+
 _NUM = r"(\d+(?:[.,]\d+)?)"
 RE = {
     "envelope": re.compile(
         rf"^ENVELOPE:\s*(?:{_NUM}|-)\s*[x×]\s*(?:{_NUM}|-)\s*$", re.I),
     "room": re.compile(
-        rf"^ROOM:\s*(?P<name>[^|]+?)\s*\|\s*area\s*(?:(?P<area>{_NUM})|-)\s*\|\s*bbox\s*"
+        rf"^ROOM:\s*(?P<name>[^|]+?)\s*\|\s*area\s*(?:(?P<area>{_NUM})\s*(?:m²|m2)?|-)\s*\|\s*bbox\s*"
         rf"(?:(?P<bb>{_NUM}\s*,\s*{_NUM}\s*,\s*{_NUM}\s*,\s*{_NUM})|-)\s*$", re.I),
     "chain": re.compile(
         rf"^CHAIN\s+(?P<side>TOP|BOTTOM|LEFT|RIGHT):\s*(?P<vals>{_NUM}"
@@ -209,6 +227,14 @@ def _overlap(a, b):
     return max(w, 0) * max(h, 0)
 
 
+def _norm_static(v, vmin, vmax, margin=0.12):
+    """Map a full-image fraction onto the building interior (labels include
+    the image margins/dimension bands → min..max spread ≈ the interior)."""
+    if vmax - vmin < 0.05:
+        return 0.5
+    return margin + (1 - 2 * margin) * (v - vmin) / (vmax - vmin)
+
+
 def _near(v, grid, tol=0.15):
     """Grid line closest to v within tol, else None."""
     best = None
@@ -291,12 +317,7 @@ def _tile(solved, xs, ys, EW, ED, flip):
     # the building interior so the systematic offset cancels out
     lxs = [r["label"][0] for r, _, _ in solved if r.get("label")]
     lys = [r["label"][1] for r, _, _ in solved if r.get("label")]
-    MARGIN = 0.12
-
-    def _norm(v, vmin, vmax):
-        if vmax - vmin < 0.05:
-            return 0.5
-        return MARGIN + (1 - 2 * MARGIN) * (v - vmin) / (vmax - vmin)
+    _norm = _norm_static
 
     items = []
     for r, dims, _ in solved:
@@ -321,13 +342,27 @@ def _tile(solved, xs, ys, EW, ED, flip):
             b = r["bbox"]
             y0f, y1f = (1 - b[3], 1 - b[1]) if flip else (b[1], b[3])
             ctr = ((b[0] + b[2]) / 2 * EW, (y0f + y1f) / 2 * ED)
-        if ctr:
-            cands = sorted(cands, key=lambda c: ((c[0] + c[2]) / 2 - ctr[0]) ** 2
-                           + ((c[1] + c[3]) / 2 - ctr[1]) ** 2)
+        # candidate score = distance to the position hint + a penalty when the
+        # candidate's size deviates from the solved dims (a grid anchor 6 cm
+        # off must not beat the exact printed size)
+        w, d = dims["w_m"], dims["d_m"]
+
+        def _score(c, _ctr=ctr, _w=w, _d=d):
+            s = 0.0
+            if _ctr:
+                s += ((c[0] + c[2]) / 2 - _ctr[0]) ** 2 \
+                     + ((c[1] + c[3]) / 2 - _ctr[1]) ** 2
+            if _w and _d:
+                # strong: a grid anchor a few cm off must never beat the
+                # exact printed size
+                s += 30 * ((c[2] - c[0] - _w) ** 2 + (c[3] - c[1] - _d) ** 2)
+            return s
+
+        scored = sorted(((c, _score(c)) for c in cands), key=lambda t: t[1])
         # keep the search tractable: exact-dims rooms have few candidates
         # anyway; area-only rooms are capped harder (hint-sorted, best first)
-        cap = 40 if (dims["w_m"] and dims["d_m"]) else 12
-        items.append((r["name"], cands[:cap], ctr))
+        cap = 40 if (w and d) else 12
+        items.append((r["name"], scored[:cap]))
     items.sort(key=lambda it: len(it[1]))
     best = {"n": -1, "dev": 1e18, "asg": {}}
 
@@ -342,18 +377,147 @@ def _tile(solved, xs, ys, EW, ED, flip):
                (len(asg) == best["n"] and dev < best["dev"]):
                 best.update(n=len(asg), dev=dev, asg=dict(asg))
             return
-        name, cands, ctr = items[i]
-        for c in cands:
+        name, scored = items[i]
+        for c, s in scored:
             if any(_overlap(c, p) > 0.05 for p in asg.values()):
                 continue
-            d = 0.0 if not ctr else \
-                ((c[0] + c[2]) / 2 - ctr[0]) ** 2 + ((c[1] + c[3]) / 2 - ctr[1]) ** 2
             asg[name] = c
-            bt(i + 1, asg, dev + d)
+            bt(i + 1, asg, dev + s)
             del asg[name]
         bt(i + 1, asg, dev)                         # room may stay unplaced
     bt(0, {}, 0.0)
     return best
+
+
+_CIRC = ("HALL", "DGT", "COULOIR", "CORRIDOR", "DEGAGEMENT", "DÉGAGEMENT",
+         "CIRCULATION", "ENTREE", "ENTRÉE", "PALIER")
+
+
+def _is_circ(name):
+    return any(k in name.upper() for k in _CIRC)
+
+
+def _edges(rc):
+    x0, y0, x1, y1 = rc
+    return {"N": (x0, y0, x1, y0), "S": (x0, y1, x1, y1),
+            "W": (x0, y0, x0, y1), "E": (x1, y0, x1, y1)}
+
+
+def _fix_openings(rooms_by_name, rects, EW, ED, hall_pt, circ_cells,
+                  hull_tol=0.45):
+    """Deterministic openings from geometry:
+    - DOOR: on the interior wall with the LONGEST contact with the
+      circulation region (hall + corridors = leftover cells); nearest point
+      to the hall as tie-break. Architectural truth: rooms open onto the
+      circulation.
+    - WINDOW: only kept on exterior walls (on the envelope hull), one per
+      wall; habitable rooms left without any window get one on their longest
+      exterior wall."""
+    def is_ext(wall, rc):
+        x0, y0, x1, y1 = rc
+        return {"N": y0 <= hull_tol, "S": y1 >= ED - hull_tol,
+                "W": x0 <= hull_tol, "E": x1 >= EW - hull_tol}[wall]
+
+    def contact(wall, seg):
+        """Length of this wall shared with a circulation cell face."""
+        ax, ay, bx, by = seg
+        total = 0.0
+        for cx0, cy0, cx1, cy1 in circ_cells:
+            if wall == "N" and abs(cy1 - ay) < 0.03:
+                total += max(0.0, min(bx, cx1) - max(ax, cx0))
+            elif wall == "S" and abs(cy0 - ay) < 0.03:
+                total += max(0.0, min(bx, cx1) - max(ax, cx0))
+            elif wall == "W" and abs(cx1 - ax) < 0.03:
+                total += max(0.0, min(by, cy1) - max(ay, cy0))
+            elif wall == "E" and abs(cx0 - ax) < 0.03:
+                total += max(0.0, min(by, cy1) - max(ay, cy0))
+        return total
+
+    def nearest_t(seg):
+        ax, ay, bx, by = seg
+        dx, dy = bx - ax, by - ay
+        L2 = dx * dx + dy * dy
+        t = 0.5 if L2 == 0 else max(0.0, min(1.0, (
+            (hall_pt[0] - ax) * dx + (hall_pt[1] - ay) * dy) / L2))
+        px, py = ax + t * dx, ay + t * dy
+        return t, (px - hall_pt[0]) ** 2 + (py - hall_pt[1]) ** 2
+
+    for name, rc in rects.items():
+        r = rooms_by_name[name]
+        if _is_circ(name):
+            r["doors"], r["windows"] = [], []
+            continue
+        # door: interior wall — max circulation contact, else nearest to hall
+        best = None
+        for wall, seg in _edges(rc).items():
+            if is_ext(wall, rc):
+                continue
+            t, dist = nearest_t(seg)
+            key = (-round(contact(wall, seg), 2), dist)
+            if best is None or key < best[0]:
+                best = (key, wall, t)
+        if best:
+            r["doors"] = [{"wall": best[1],
+                           "at": round(max(0.15, min(0.85, best[2])), 2)}]
+        # windows: exterior walls only, one per wall (mean position)
+        by_wall = {}
+        for o in r.get("windows", []):
+            if is_ext(o["wall"], rc):
+                by_wall.setdefault(o["wall"], []).append(o["at"])
+        kept = [{"wall": w, "at": round(sum(a) / len(a), 2)}
+                for w, a in by_wall.items()]
+        if not kept and (r.get("area") or 0) >= 7:
+            ext = [(wall, s) for wall, s in _edges(rc).items()
+                   if is_ext(wall, rc)]
+            if ext:
+                wall, _ = max(ext, key=lambda we: abs(we[1][2] - we[1][0])
+                              + abs(we[1][3] - we[1][1]))
+                kept = [{"wall": wall, "at": 0.5}]
+        r["windows"] = kept
+
+
+def _gap_fill(rects, EW, ED):
+    """Cells of the envelope not covered by any room. A clean rectangular gap
+    of plausible room size = a room the vision missed → surfaced as PIECE ?
+    so the user sees the hole instead of silently losing a room."""
+    ex = sorted({0.0, EW, *[v for rc in rects.values() for v in (rc[0], rc[2])]})
+    ey = sorted({0.0, ED, *[v for rc in rects.values() for v in (rc[1], rc[3])]})
+    covered = [[any(rc[0] <= (ex[i] + ex[i + 1]) / 2 <= rc[2] and
+                    rc[1] <= (ey[j] + ey[j + 1]) / 2 <= rc[3]
+                    for rc in rects.values())
+                for j in range(len(ey) - 1)] for i in range(len(ex) - 1)]
+    gaps, used = [], set()
+    for i in range(len(ex) - 1):
+        for j in range(len(ey) - 1):
+            if covered[i][j] or (i, j) in used:
+                continue
+            i2 = i
+            while i2 + 1 < len(ex) - 1 and not covered[i2 + 1][j] \
+                    and (i2 + 1, j) not in used:
+                i2 += 1
+            j2 = j
+            while j2 + 1 < len(ey) - 1 and all(
+                    not covered[k][j2 + 1] and (k, j2 + 1) not in used
+                    for k in range(i, i2 + 1)):
+                j2 += 1
+            for k in range(i, i2 + 1):
+                for l in range(j, j2 + 1):
+                    used.add((k, l))
+            g = (ex[i], ey[j], ex[i2 + 1], ey[j2 + 1])
+            gaps.append([round(v, 2) for v in g])
+    return gaps
+
+
+def _touches(a, b, min_len=0.4):
+    """True if rects a and b share an edge segment of at least min_len."""
+    for (e1, e2, lo, hi, olo, ohi) in (
+            (a[2], b[0], a[1], a[3], b[1], b[3]),   # a.E vs b.W
+            (a[0], b[2], a[1], a[3], b[1], b[3]),   # a.W vs b.E
+            (a[3], b[1], a[0], a[2], b[0], b[2]),   # a.S vs b.N
+            (a[1], b[3], a[0], a[2], b[0], b[2])):  # a.N vs b.S
+        if abs(e1 - e2) < 0.03 and min(hi, ohi) - max(lo, olo) >= min_len:
+            return True
+    return False
 
 
 def build_plan(facts, project="plan"):
@@ -366,13 +530,28 @@ def build_plan(facts, project="plan"):
     else:
         sys.exit("no ENVELOPE and no CHAIN lines — cannot scale the plan")
 
+    # a side value that appears verbatim in a printed chain is corroborated;
+    # an uncorroborated side that contradicts the printed area was misread by
+    # the vision model → drop it and let the solver recompute it (area ÷ side)
+    chain_vals = [v for c in facts.get("chains", {}).values() for v in c]
+
+    def _corrob(v):
+        return any(abs(v - cv) <= 0.03 for cv in chain_vals)
+
     solved = []
     for r in facts["rooms"]:
-        f = {"name": r["name"], "area_m2": r["area"]}
-        if "w" in r["sides"]:
-            f["width_m"] = r["sides"]["w"]
-        if "d" in r["sides"]:
-            f["depth_m"] = r["sides"]["d"]
+        w, d, area = r["sides"].get("w"), r["sides"].get("d"), r["area"]
+        if chain_vals and w and d and area and \
+                abs(w * d - area) > max(0.2, 0.04 * area):
+            if _corrob(w) and not _corrob(d):
+                d = None
+            elif _corrob(d) and not _corrob(w):
+                w = None
+        f = {"name": r["name"], "area_m2": area}
+        if w:
+            f["width_m"] = w
+        if d:
+            f["depth_m"] = d
         dims, warns = solve_room(f)
         solved.append((r, dims, warns))
 
@@ -385,6 +564,93 @@ def build_plan(facts, project="plan"):
         print("· bbox orientation: y-flip detected")
     rects = {k: [round(v, 2) for v in c] for k, c in pick["asg"].items()}
     print(f"· tiling: {pick['n']} rooms locked on the printed wall grid")
+
+    rooms_by_name = {r["name"]: r for r, _, _ in solved}
+    hall_rect, hall_pt = None, (EW / 2, ED / 2)
+    for name, rc in rects.items():
+        if _is_circ(name):
+            hall_rect = rc
+            hall_pt = ((rc[0] + rc[2]) / 2, (rc[1] + rc[3]) / 2)
+            break
+
+    # normalized label points of rooms that did NOT get placed — a gap that
+    # sits next to such a label IS that room (vision saw the name but not
+    # usable dims; geometry fills the rest)
+    lxs = [r["label"][0] for r, _, _ in solved if r.get("label")]
+    lys = [r["label"][1] for r, _, _ in solved if r.get("label")]
+    unplaced_lbl = {}
+    for r, _, _ in solved:
+        if r["name"] not in rects and r.get("label") and not _is_circ(r["name"]):
+            unplaced_lbl[r["name"]] = (
+                _norm_static(r["label"][0], min(lxs), max(lxs)) * EW,
+                _norm_static(r["label"][1], min(lys), max(lys)) * ED)
+
+    # unfilled cells: hall-adjacent ones ARE the circulation (halls are rarely
+    # rectangular); isolated room-sized ones = rooms the vision missed
+    circ_cells = [hall_rect] if hall_rect else []
+    gi = 0
+    for g in _gap_fill(rects, EW, ED):
+        w, d = g[2] - g[0], g[3] - g[1]
+        roomlike = (w >= 0.6 and d >= 0.6 and w * d >= 1.0
+                    and max(w, d) / min(w, d) <= 3.2)
+        if hall_rect is not None and _touches(g, hall_rect):
+            circ_cells.append(g)          # arm of the hall, not a room
+            continue
+        if not roomlike:
+            # a sliver aligned with the full width/height of an adjacent room
+            # is that room's missing strip (misread area) → absorb it
+            absorbed = False
+            for nm2, rc2 in rects.items():
+                if _is_circ(nm2):
+                    continue
+                same_x = abs(g[0] - rc2[0]) < 0.05 and abs(g[2] - rc2[2]) < 0.05
+                same_y = abs(g[1] - rc2[1]) < 0.05 and abs(g[3] - rc2[3]) < 0.05
+                if same_x and (abs(g[1] - rc2[3]) < 0.05 or abs(g[3] - rc2[1]) < 0.05):
+                    rc2[1], rc2[3] = min(rc2[1], g[1]), max(rc2[3], g[3])
+                elif same_y and (abs(g[0] - rc2[2]) < 0.05 or abs(g[2] - rc2[0]) < 0.05):
+                    rc2[0], rc2[2] = min(rc2[0], g[0]), max(rc2[2], g[2])
+                else:
+                    continue
+                print(f"· sliver {g} absorbé par {nm2}")
+                absorbed = True
+                break
+            if not absorbed:
+                circ_cells.append(g)      # corridor sliver
+            continue
+        area = round(w * d, 2)
+        # adopt the nearest unplaced label (e.g. a WC seen by name only)
+        nm = None
+        for cand, (px, py) in list(unplaced_lbl.items()):
+            dx = max(g[0] - px, 0, px - g[2])
+            dy = max(g[1] - py, 0, py - g[3])
+            if (dx * dx + dy * dy) ** 0.5 <= 1.5:
+                nm = cand
+                del unplaced_lbl[cand]
+                break
+        if nm:
+            for i, (r, dims, warns) in enumerate(solved):
+                if r["name"] == nm:
+                    solved[i] = (r, {"w_m": round(w, 2), "d_m": round(d, 2),
+                                     "area_m2": area, "ceiling_m": None},
+                                 ["placed from geometry gap (vision gave "
+                                  "name/label only)"])
+                    break
+        else:
+            gi += 1
+            nm = f"PIECE ? {gi}"
+            rooms_by_name[nm] = {"name": nm, "area": area, "sides": {},
+                                 "doors": [], "windows": [], "bbox": None}
+            solved.append((rooms_by_name[nm],
+                           {"w_m": round(w, 2), "d_m": round(d, 2),
+                            "area_m2": area, "ceiling_m": None},
+                           ["gap not covered by any read room — check the plan"]))
+        rects[nm] = g
+        print(f"· gap → {nm}: {g} ({area} m²)")
+
+    # deterministic openings (doors toward the circulation, windows on hull)
+    _fix_openings(rooms_by_name, rects, EW, ED, hall_pt, circ_cells)
+    print(f"· openings: doors re-aimed at the circulation, "
+          f"windows filtered to the hull ({len(circ_cells)} circ cells)")
 
     rooms_out = []
     for r, dims, warns in solved:
@@ -463,6 +729,11 @@ def main():
             texts.append(ask_vision(args.image))
         print("· labels pass (room-name positions) …")
         texts.append(ask_vision(args.image, LABELS_PROMPT))
+        # completeness pass: give the model the room list, ask what's missing
+        found, _ = parse_lines("\n".join(texts))
+        names = [r["name"] for r in found["rooms"]]
+        print("· completeness pass (missed small rooms?) …")
+        texts.append(ask_vision(args.image, completeness_prompt(names)))
         text = "\n".join(texts)
         src = args.image
         # keep the raw lines next to the output for audit/repair
