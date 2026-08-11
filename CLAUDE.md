@@ -32,6 +32,15 @@ tableau, spots encastrés, flaques de lumière, silhouettes grises). Diagnostic 
    **Reste à faire qualité** : ombres de contact des meubles (spots sans castShadow pour la perf),
    sconces globes muraux, personnes assises, moulures/plinthes. Et toujours le backlog #4 :
    Space segmentation JSON + `rooms[].poly` + édition dans cad.html.
+3. **RÈGLE ABSOLUE née de la colère user (« tu feras encore des erreurs sur d'autres plans ») :
+   `tools/plan_audit.py` = étape OBLIGATOIRE avant de montrer un 3D.** Superpose le plan.json
+   (pièces rouge, portes vert, fenêtres bleu, meubles orange, entrée magenta) sur l'image source,
+   calé automatiquement sur les murs (couleur poché bleu nuit ; repli composante sombre).
+   `python3 tools/plan_audit.py web/plans/x.json image.jpg -o overlay.png` puis REGARDER l'overlay.
+   Sur le plan user, l'audit a attrapé d'un coup : porte d'entrée absente du schéma (→ `MODEL.entry`
+   ajouté dans cad.html, 2D+3D), frigo cuisine inventé, 2e fenêtre N du séjour manquante,
+   lave-mains changing manquant, 4 portes décalées. Ne JAMAIS transcrire un plan à la main
+   sans passer l'audit derrière.
 
 ## ⚡⚡⚡ SESSION 2026-07-02 #4 — Restructuration « ARES-lite » : plan.json = source de vérité
 
