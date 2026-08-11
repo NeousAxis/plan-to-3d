@@ -3,6 +3,7 @@
   "units": "m",
   "wall_height": 2.5,
   "envelope": [14.26, 7.04],
+  "entry": { "edge": "S", "x": 6.9 },
   "circulation": [
     [3.01, 3.72, 7.76, 4.67],
     [3.01, 4.67, 7.61, 5.82],
@@ -29,7 +30,7 @@
       "name": "BEDROOM 2",
       "area_m2": 12.42,
       "rect": [0.0, 3.72, 3.01, 7.04],
-      "doors": [{ "wall": "E", "at": 0.46 }],
+      "doors": [{ "wall": "E", "at": 0.4 }],
       "windows": [{ "wall": "W", "at": 0.55 }],
       "furniture": [
         { "item": "lit double", "kind": "bed", "rect": [0.08, 5.5, 1.98, 6.9], "h": 0.55, "wall": "W" },
@@ -41,7 +42,7 @@
       "name": "BATHROOM",
       "area_m2": 5.71,
       "rect": [5.36, 0.0, 7.76, 2.38],
-      "doors": [{ "wall": "S", "at": 0.5 }],
+      "doors": [{ "wall": "S", "at": 0.3 }],
       "windows": [],
       "furniture": [
         { "item": "baignoire", "kind": "bathtub", "rect": [7.14, 0.06, 7.7, 1.96], "h": 0.58, "wall": "E" },
@@ -53,7 +54,7 @@
       "name": "SHOWER ROOM",
       "area_m2": 2.55,
       "rect": [3.01, 5.82, 5.21, 6.98],
-      "doors": [{ "wall": "N", "at": 0.5 }],
+      "doors": [{ "wall": "N", "at": 0.72 }],
       "windows": [],
       "furniture": [
         { "item": "douche", "kind": "shower", "rect": [3.11, 5.98, 4.06, 6.93], "h": 0.15, "wall": "S" },
@@ -67,7 +68,8 @@
       "doors": [{ "wall": "N", "at": 0.53 }],
       "windows": [],
       "furniture": [
-        { "item": "penderie", "kind": "wardrobe", "rect": [7.7, 6.42, 9.5, 6.98], "h": 2.2, "wall": "S" }
+        { "item": "penderie", "kind": "wardrobe", "rect": [7.7, 6.42, 9.5, 6.98], "h": 2.2, "wall": "S" },
+        { "item": "lave-mains", "kind": "vanity", "rect": [9.4, 5.45, 9.92, 5.98], "h": 0.85, "wall": "E" }
       ]
     },
     {
@@ -87,16 +89,15 @@
       "doors": [{ "wall": "W", "at": 0.12 }],
       "windows": [{ "wall": "E", "at": 0.5 }],
       "furniture": [
-        { "item": "plan de travail (plaque + évier)", "kind": "counter", "rect": [11.05, 6.36, 14.2, 6.94], "h": 0.9, "wall": "S" },
-        { "item": "réfrigérateur", "kind": "fridge", "rect": [10.96, 4.4, 11.6, 5.1], "h": 1.85, "wall": "W" }
+        { "item": "plan de travail (plaque + évier)", "kind": "counter", "rect": [11.05, 6.36, 14.2, 6.94], "h": 0.9, "wall": "S" }
       ]
     },
     {
       "name": "LIVING ROOM",
       "area_m2": 27.95,
       "rect": [7.76, 0.0, 14.26, 4.3],
-      "doors": [{ "wall": "S", "at": 0.24 }],
-      "windows": [{ "wall": "N", "at": 0.51 }, { "wall": "E", "at": 0.5 }],
+      "doors": [{ "wall": "S", "at": 0.12 }],
+      "windows": [{ "wall": "N", "at": 0.51 }, { "wall": "N", "at": 0.87 }, { "wall": "E", "at": 0.5 }],
       "furniture": [
         { "item": "meuble TV", "kind": "tv", "rect": [8.85, 0.08, 10.75, 0.52], "h": 0.5, "wall": "N" },
         { "item": "canapé", "kind": "sofa", "rect": [9.35, 2.35, 11.25, 3.2], "h": 0.75, "wall": "S" },

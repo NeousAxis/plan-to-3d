@@ -123,6 +123,12 @@ function wallGraph(){
     if(y1>=bb.y1-HT)L('H',y1).spans.push([x0,x1]);
     if(x0<=bb.x0+HT)L('V',x0).spans.push([y0,y1]);
     if(x1>=bb.x1-HT)L('V',x1).spans.push([y0,y1]);});
+  // porte d'entrée sur le hull : MODEL.entry = {edge:'S'|'N'|'W'|'E', x|y}
+  if(MODEL.entry){const e=MODEL.entry;
+    if(e.edge==='S'||e.edge==='N')
+      L('H',e.edge==='S'?bb.y1:bb.y0).gaps.push({a:e.x-DOORW/2,b:e.x+DOORW/2,kind:'door'});
+    else
+      L('V',e.edge==='W'?bb.x0:bb.x1).gaps.push({a:e.y-DOORW/2,b:e.y+DOORW/2,kind:'door'});}
   // merge coincident lines within half a wall (grid noise)
   const out=[]; const done=new Set();
   const all=Object.values(lines).sort((a,b)=>a.axis===b.axis?a.pos-b.pos:(a.axis<b.axis?-1:1));
@@ -318,6 +324,22 @@ function draw2d(){
       for(let i=0;i<=14;i++){const a2=a0+dd*i/14;
         const px=X(hx)+DOORW*T2.s*Math.cos(a2),py=Y(hy)+DOORW*T2.s*Math.sin(a2);
         i?g.lineTo(px,py):g.moveTo(px,py);}g.stroke();});});
+  // porte d'entrée (battant + arc, ouvrant vers l'intérieur)
+  if(MODEL.entry){
+    const e=MODEL.entry,bbe=bboxModel();
+    let hx,hy,nx,ny,ux,uy;
+    if(e.edge==='S'){hx=e.x-DOORW/2;hy=bbe.y1;ux=1;uy=0;nx=0;ny=-1;}
+    else if(e.edge==='N'){hx=e.x-DOORW/2;hy=bbe.y0;ux=1;uy=0;nx=0;ny=1;}
+    else if(e.edge==='W'){hx=bbe.x0;hy=e.y-DOORW/2;ux=0;uy=1;nx=1;ny=0;}
+    else{hx=bbe.x1;hy=e.y-DOORW/2;ux=0;uy=1;nx=-1;ny=0;}
+    g.strokeStyle='#8a5a2b';g.lineWidth=Math.max(1.6,T2.s*0.035);
+    g.beginPath();g.moveTo(X(hx),Y(hy));g.lineTo(X(hx+nx*DOORW),Y(hy+ny*DOORW));g.stroke();
+    const a0=Math.atan2(ny,nx),a1=Math.atan2(uy,ux);
+    let dd=a1-a0;while(dd>Math.PI)dd-=2*Math.PI;while(dd<-Math.PI)dd+=2*Math.PI;
+    g.lineWidth=1;g.beginPath();
+    for(let i=0;i<=14;i++){const a2=a0+dd*i/14;
+      const px=X(hx)+DOORW*T2.s*Math.cos(a2),py=Y(hy)+DOORW*T2.s*Math.sin(a2);
+      i?g.lineTo(px,py):g.moveTo(px,py);}g.stroke();}
   // labels
   g.textAlign='center';
   MODEL.rooms.forEach((r,i)=>{
@@ -729,14 +751,40 @@ function build3d(){
     ce.position.set(mX((g[0]+g[2])/2),H+0.025,mZ((g[1]+g[3])/2));
     ce.visible=false;sc.add(ce);R3.ceilings.push(ce);
     const HT=0.45;
-    if(g[1]<=bb.y0+HT)box(g[0],g[1],g[2],g[1],0,H,MAT.wall);
-    if(g[3]>=bb.y1-HT)box(g[0],g[3],g[2],g[3],0,H,MAT.wall);
-    if(g[0]<=bb.x0+HT)box(g[0],g[1],g[0],g[3],0,H,MAT.wall);
-    if(g[2]>=bb.x1-HT)box(g[2],g[1],g[2],g[3],0,H,MAT.wall);
+    const entryWall=(horiz,pos,c0,c1)=>{      // mur de hull avec trou d'entrée
+      const e=MODEL.entry,near=(a,b)=>Math.abs(a-b)<=0.5;
+      const on=e&&(horiz
+        ?((e.edge==='S'&&near(pos,bb.y1))||(e.edge==='N'&&near(pos,bb.y0)))
+        :((e.edge==='W'&&near(pos,bb.x0))||(e.edge==='E'&&near(pos,bb.x1))));
+      const gp=on?[(horiz?e.x:e.y)-DOORW/2,(horiz?e.x:e.y)+DOORW/2]:null;
+      if(gp&&c0<gp[1]&&c1>gp[0]){
+        if(c0<gp[0])entryWall(horiz,pos,c0,gp[0]);
+        if(c1>gp[1])entryWall(horiz,pos,gp[1],c1);
+        horiz?box(Math.max(c0,gp[0]),pos,Math.min(c1,gp[1]),pos,2.05,H,MAT.wall)
+             :box(pos,Math.max(c0,gp[0]),pos,Math.min(c1,gp[1]),2.05,H,MAT.wall);
+        return;}
+      horiz?box(c0,pos,c1,pos,0,H,MAT.wall):box(pos,c0,pos,c1,0,H,MAT.wall);};
+    if(g[1]<=bb.y0+HT)entryWall(true,g[1],g[0],g[2]);
+    if(g[3]>=bb.y1-HT)entryWall(true,g[3],g[0],g[2]);
+    if(g[0]<=bb.x0+HT)entryWall(false,g[0],g[1],g[3]);
+    if(g[2]>=bb.x1-HT)entryWall(false,g[2],g[1],g[3]);
   });
   // fermeture du hull : murs sur tout segment du périmètre non couvert
   // par une pièce (zones de circulation label-only)
   {const closeEdge=(horiz,pos)=>{
+    const e=MODEL.entry;
+    const onEdge=e&&(horiz
+      ?((e.edge==='S'&&pos===bb.y1)||(e.edge==='N'&&pos===bb.y0))
+      :((e.edge==='W'&&pos===bb.x0)||(e.edge==='E'&&pos===bb.x1)));
+    const gap=onEdge?[(horiz?e.x:e.y)-DOORW/2,(horiz?e.x:e.y)+DOORW/2]:null;
+    const emit=(c0,c1)=>{
+      if(gap&&c0<gap[1]&&c1>gap[0]){                      // porte d'entrée
+        if(c0<gap[0])emit(c0,gap[0]);
+        if(c1>gap[1])emit(gap[1],c1);
+        const g0=Math.max(c0,gap[0]),g1=Math.min(c1,gap[1]);
+        horiz?box(g0,pos,g1,pos,2.05,H,MAT.wall):box(pos,g0,pos,g1,2.05,H,MAT.wall);
+        return;}
+      horiz?box(c0,pos,c1,pos,0,H,MAT.wall):box(pos,c0,pos,c1,0,H,MAT.wall);};
     const covered=[];
     MODEL.rooms.forEach(r=>{if(!r.rect)return;const rc=r.rect;
       if(horiz&&Math.abs((pos===bb.y0?rc[1]:rc[3])-pos)<0.02)covered.push([rc[0],rc[2]]);
@@ -744,9 +792,9 @@ function build3d(){
     covered.sort((a,b)=>a[0]-b[0]);
     let cur=horiz?bb.x0:bb.y0;const end=horiz?bb.x1:bb.y1;
     covered.forEach(([a,b])=>{
-      if(a>cur+0.03)horiz?box(cur,pos,a,pos,0,H,MAT.wall):box(pos,cur,pos,a,0,H,MAT.wall);
+      if(a>cur+0.03)emit(cur,a);
       cur=Math.max(cur,b);});
-    if(cur<end-0.03)horiz?box(cur,pos,end,pos,0,H,MAT.wall):box(pos,cur,pos,end,0,H,MAT.wall);};
+    if(cur<end-0.03)emit(cur,end);};
    closeEdge(true,bb.y0);closeEdge(true,bb.y1);
    closeEdge(false,bb.x0);closeEdge(false,bb.x1);}
   // circulation sans pièce (hall/couloirs label-only) : spots échantillonnés
