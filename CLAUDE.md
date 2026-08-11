@@ -5,6 +5,34 @@
 > existants en « ARES-lite »** autour d'une source de vérité unique (`plan.json`).
 > Lis ⚡⚡⚡ (#4) puis les leçons de ⚡⚡ (#3) AVANT tout.
 
+## ⚡⚡⚡⚡ SESSION 2026-08-11 #5 — « Le projet ne fonctionne pas » : crash Visiter réparé + rendu intérieur niveau rendu CAO
+
+L'user est arrivé fâché avec une image de référence (rendu CAO pro : couloir, panneaux bois,
+tableau, spots encastrés, flaques de lumière, silhouettes grises). Diagnostic + fix dans `web/cad.html` :
+
+1. **LE bug qui rendait « Visiter » mort** : passer en vue 3D seule (`setView('v3d')`, donc
+   Visiter ET `?eye=`) redessinait le 2D avec un canvas de largeur 0 → `T2.s` négatif →
+   `roundRect` rayon négatif → RangeError **avalée par le `.catch` du boot** qui affichait le
+   toast « Servir via http » trompeur. Fix : guard dans `draw2d()` + le catch loggue et
+   n'affiche le hint que si `MODEL` est null. Leçon : ce `.catch` attrape TOUTE la chaîne `.then`.
+2. **Upgrade rendu intérieur** (tout procédural, zéro asset externe, distribuable) :
+   ACES tone mapping + sRGB ; spots plafonniers encastrés (SpotLight + luminaire visible en FP,
+   grille ~2,7 m/pièce + échantillonnage 1,4 m sur la circulation, cap 24) ; **double régime
+   lumineux** `fpLights(on)` (dollhouse = soleil ; FP = ambiance basse, spots dominants → les
+   flaques de la référence) ; matériaux MeshStandard (terrazzo circulation, parquet repeat
+   proportionnel à la pièce, placage bois) ; **mur d'accent** placage + toile abstraite sur le
+   plus grand pan de mur PLEIN (living/chambres/hall) ; **silhouettes entourage billboard**
+   (toujours face caméra, hall + séjour) ; fenêtres = MeshBasic lumineux ; fermeture du hull
+   (murs sur les segments du périmètre non couverts par une pièce) + dalle terrazzo + plafond
+   sous tout le hull (le HALL de apartment_2br est label-only, sans rect ni circulation !) ;
+   spawn FP : pièce HALL/ENTR → plus grande cellule de circulation → label_at du hall,
+   regard initial = azimut le plus dégagé (`freeDirAt`, 16 directions, l'axe du couloir).
+   Vérifié dans Chrome sur les 2 plans (`apartment_2br.json` + `appart_auto.json`) :
+   entrée/sortie Visiter, dollhouse intact, 2D intact.
+   **Reste à faire qualité** : ombres de contact des meubles (spots sans castShadow pour la perf),
+   sconces globes muraux, personnes assises, moulures/plinthes. Et toujours le backlog #4 :
+   Space segmentation JSON + `rooms[].poly` + édition dans cad.html.
+
 ## ⚡⚡⚡ SESSION 2026-07-02 #4 — Restructuration « ARES-lite » : plan.json = source de vérité
 
 ### Le recadrage user (à prendre au sérieux)
