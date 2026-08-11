@@ -570,8 +570,7 @@ function init3d(){
     const dt=Math.min(R3.clock.getDelta(),.1);
     if(R3.fp)stepFP(dt);else R3.controls.update();
     if(R3.scene){
-      (R3.people||[]).forEach(p=>{p.rotation.y=Math.atan2(   // billboard entourage
-        R3.camera.position.x-p.position.x,R3.camera.position.z-p.position.z);});
+      updatePeople();
       R3.renderer.render(R3.scene,R3.camera);
       if(!R3.fp)R3.lr.render(R3.scene,R3.camera);}})();
 }
@@ -619,7 +618,7 @@ function build3d(){
   const down=(x,z,it)=>{
     if(_spots>=24)return;_spots++;
     const s=new THREE.SpotLight(0xffe3bd,it||.8,7.5,0.5,0.45,1.05);
-    s.userData.fpIntensity=(it||.8)*2.8;s.userData.extIntensity=(it||.8)*.55;
+    s.userData.fpIntensity=(it||.8)*2.8;s.userData.extIntensity=(it||.8)*.28;
     s.intensity=s.userData.extIntensity;
     s.position.set(x,H-0.06,z);s.target.position.set(x,0,z);
     sc.add(s);sc.add(s.target);R3.spots.push(s);
@@ -806,10 +805,10 @@ function enterFP(){
 /* régime lumineux : dollhouse = soleil ; intérieur (FP) = spots dominants,
    ambiance basse → les flaques de lumière du rendu de référence */
 function fpLights(on){
-  if(R3.hemi)R3.hemi.intensity=on?0.16:0.45;
-  if(R3.sun)R3.sun.intensity=on?0.25:0.95;
+  if(R3.hemi)R3.hemi.intensity=on?0.16:0.42;
+  if(R3.sun)R3.sun.intensity=on?0.25:0.8;
   (R3.spots||[]).forEach(s=>s.intensity=on?s.userData.fpIntensity:s.userData.extIntensity);
-  R3.renderer.toneMappingExposure=on?1.0:1.05;
+  R3.renderer.toneMappingExposure=on?1.0:0.95;
 }
 function exitFP(){
   if(!R3.fp)return;
@@ -907,12 +906,45 @@ function staticEye(r,yawDeg){
 /* headless-friendly canvas capture: ?shot=1 POSTs the 3D view as PNG to the
    local shot server (tools/shot_server.py, port 8778) — no user gesture
    needed, so the whole per-room base-image pipeline can run unattended */
+function updatePeople(){
+  (R3.people||[]).forEach(p=>{p.rotation.y=Math.atan2(   // billboard entourage
+    R3.camera.position.x-p.position.x,R3.camera.position.z-p.position.z);});}
 function shotPNG(name){
+  updatePeople();
   R3.renderer.render(R3.scene,R3.camera);
   R3.renderer.domElement.toBlob(b=>{
     fetch('http://localhost:8778/save/'+name,{method:'POST',body:b})
       .then(()=>console.log('shot saved:',name))
       .catch(err=>console.warn('shot server absent:',err));},'image/png');
+}
+/* ?shot=tour : LA commande unique — dollhouse axo + une capture par pièce,
+   toutes POSTées au shot server (tools/shot_server.py). Headless-friendly :
+   la taille du renderer est forcée (le pane peut être 0×0 sans onglet visible). */
+function tourShots(){
+  const SW=1600,SH=1000;
+  const hd=()=>{R3.renderer.setSize(SW,SH,false);
+    R3.camera.aspect=SW/SH;R3.camera.updateProjectionMatrix();};
+  // 1. dollhouse axo 3/4 (éclairage extérieur)
+  exitFP();hd();
+  const ex=Math.max(_map3.bb.w,_map3.bb.h);
+  R3.camera.position.set(ex*0.3,ex*0.9,ex*0.55);   // axo 3/4 plongeante
+  R3.controls.target.set(0,0,0);R3.controls.update();hd();
+  shotPNG('tour_00_dollhouse.png');
+  // 2. une vue par pièce (éclairage intérieur)
+  const rooms=MODEL.rooms.filter(r=>r.rect);
+  let i=0;
+  const step=()=>{
+    if(i>=rooms.length){exitFP();console.log('tour done');return;}
+    const r=rooms[i];
+    staticEye(r,null);
+    R3.camera.position.set(R3.eye.x,1.6,R3.eye.z);
+    R3.camera.rotation.y=R3.yaw;R3.camera.rotation.x=0;hd();
+    setTimeout(()=>{
+      shotPNG('tour_'+String(i+1).padStart(2,'0')+'_'+
+        r.name.replace(/[^\w]+/g,'_').toLowerCase()+'.png');
+      i++;setTimeout(step,400);},400);
+  };
+  setTimeout(step,900);
 }
 
 /* boot — ?plan=plans/xxx.json pour charger un autre plan */
@@ -921,6 +953,7 @@ const Q=new URLSearchParams(location.search);
 const PLAN=Q.get('plan')||'plans/apartment_2br.json';
 fetch(PLAN).then(r=>r.json()).then(m=>{
   setModel(m);
+  if(Q.get('shot')==='tour'){setTimeout(tourShots,900);return;}
   const eye=Q.get('eye');
   if(eye){
     const r=MODEL.rooms.find(r=>r.rect&&r.name.toUpperCase().includes(eye.toUpperCase()));
