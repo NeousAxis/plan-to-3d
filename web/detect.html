@@ -31,6 +31,7 @@
   <div id="wrap"><canvas id="cv" width="900" height="500"></canvas></div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 'use strict';
 const MODEL='https://huggingface.co/NeousAxis/plan-openings-onnx/resolve/main/best.onnx';
@@ -67,6 +68,7 @@ function kindOf(c){
   if(c.includes('door'))return'door';
   if(c.includes('window')||c==='glass')return'window';
   if(c.startsWith('fixedfurniture')||c==='tub')return'fixture';
+  if(c==='wall'||c==='wall external')return'wall';
   return null;                       // murs, espaces, labels… non affichés
 }
 const COL={door:'#0aa84f',window:'#1e5ae6',fixture:'#f08c00'};
@@ -74,6 +76,7 @@ const COL={door:'#0aa84f',window:'#1e5ae6',fixture:'#f08c00'};
 async function run(im){
   img=im;
   st.textContent='détection en cours…';
+  const ocrP=ocrInfo(im);
   await new Promise(r=>setTimeout(r,30));   // laisse peindre le statut
   // letterbox 1024×1024, image collée en (0,0)
   const sc=S/Math.max(im.width,im.height);
@@ -118,18 +121,19 @@ async function run(im){
   cv.width=im.width;cv.height=im.height;
   g.drawImage(im,0,0);
   g.lineWidth=Math.max(2,im.width/500);g.font=(im.width/85|0)+'px system-ui';
-  keep.forEach(c=>{g.strokeStyle=g.fillStyle=COL[c.kind];
+  keep.filter(c=>c.kind!=='wall').forEach(c=>{g.strokeStyle=g.fillStyle=COL[c.kind];
     g.strokeRect(c.x0,c.y0,c.x1-c.x0,c.y1-c.y0);
     g.fillText(c.cls.replace(/^fixedfurniture /,''),c.x0+2,c.y0-3);});
-  const counts={};keep.forEach(c=>counts[c.kind]=(counts[c.kind]||0)+1);
+  const counts={};keep.filter(c=>c.kind!=='wall').forEach(c=>counts[c.kind]=(counts[c.kind]||0)+1);
   st.textContent=`✓ ${counts.door||0} portes · ${counts.window||0} fenêtres · ${counts.fixture||0} équipements`;
-  lastJSON={image:{width:im.width,height:im.height},detections:keep.map(c=>({
+  lastJSON={image:{width:im.width,height:im.height},detections:keep.filter(c=>c.kind!=='wall').map(c=>({
     kind:c.kind,class:c.cls,conf:+c.conf.toFixed(3),
     bbox:[+c.x0.toFixed(1),+c.y0.toFixed(1),+c.x1.toFixed(1),+c.y1.toFixed(1)]}))};
   const dl=document.getElementById('dl');dl.disabled=false;
   dl.onclick=()=>{const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([JSON.stringify(lastJSON,null,1)],{type:'application/json'}));
     a.download='detections.json';a.click();};
+  lastWords=await ocrP;
   _snap=null;
   buildPlan(keep,im);
 }
@@ -137,12 +141,30 @@ async function run(im){
 /* ─── reconstruction : image + détections → plan.json → PlanCAD ───
    pièces = zones closes entre les murs (les ouvertures détectées ferment
    les trous), échelle = largeur standard des portes (~0,95 m). */
-let lastDets=null,lastIm=null,_snap=null;
+let lastDets=null,lastIm=null,lastWords=null,_snap=null;
+
+/* OCR des textes du plan (tesseract.js, dans le navigateur) :
+   les surfaces imprimées calent l'ÉCHELLE, les libellés donnent les NOMS. */
+async function ocrInfo(im){
+  try{
+    const k=Math.min(2,2400/im.width);          // ×2 : le petit texte des plans
+    const c=document.createElement('canvas');
+    c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+    const w=await Tesseract.createWorker('eng');
+    const{data}=await w.recognize(c);
+    await w.terminate();
+    return (data.words||[]).map(o=>({t:o.text,x:(o.bbox.x0+o.bbox.x1)/2/k,
+                                     y:(o.bbox.y0+o.bbox.y1)/2/k}));
+  }catch(e){console.warn('OCR indisponible:',e);return[];}
+}
+
 function buildPlan(dets,im,forcedPxm){
   lastDets=dets;lastIm=im;
   if(!_snap)_snap=g.getImageData(0,0,cv.width,cv.height);
-  else g.putImageData(_snap,0,0);          // rebuild : repartir des détections
-  // 1. masque murs (bleu nuit OU sombre) sur grille réduite
+  else g.putImageData(_snap,0,0);
+  const words=lastWords||[];
+  // 1. masque murs (bleu nuit OU sombre)
   const MW=Math.min(1100,im.width), f=MW/im.width, MH=Math.round(im.height*f);
   const c2=document.createElement('canvas');c2.width=MW;c2.height=MH;
   const G=c2.getContext('2d');G.drawImage(im,0,0,MW,MH);
@@ -156,26 +178,21 @@ function buildPlan(dets,im,forcedPxm){
     if(navy){const x=i%MW,y=(i/MW)|0;
       if(x<wx0)wx0=x;if(x>wx1)wx1=x;if(y<wy0)wy0=y;if(y>wy1)wy1=y;}}
   if(wx1<0){st.textContent+=' · reconstruction impossible (murs introuvables)';return;}
-  // dilatation 1 px : bouche les micro-fuites d'anticrénelage
-  {const w2=new Uint8Array(wall);
+  {const w2=new Uint8Array(wall);          // dilatation anti-fuites
    for(let y=1;y<MH-1;y++)for(let x=1;x<MW-1;x++){const i=y*MW+x;
      if(w2[i]||w2[i-1]||w2[i+1]||w2[i-MW]||w2[i+MW])wall[i]=1;}}
-  // 2. les ouvertures détectées deviennent des murs (fermer les pièces)
-  dets.filter(c=>c.kind!=='fixture').forEach(c=>{
+  dets.filter(c=>c.kind==='wall').forEach(c=>{      // murs détectés (renfort)
+    const w=c.x1-c.x0,h=c.y1-c.y0;
+    if(Math.min(w,h)>0.3*Math.max(w,h))return;        // blobs douteux ignorés
+    const x0=Math.max(0,(c.x0*f)|0),x1=Math.min(MW-1,(c.x1*f)|0);
+    const y0=Math.max(0,(c.y0*f)|0),y1=Math.min(MH-1,(c.y1*f)|0);
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)wall[y*MW+x]=1;});
+  dets.filter(c=>c.kind==='door'||c.kind==='window').forEach(c=>{   // sceller les ouvertures
     const x0=Math.max(0,(c.x0*f-5)|0),x1=Math.min(MW-1,(c.x1*f+5)|0);
     const y0=Math.max(0,(c.y0*f-5)|0),y1=Math.min(MH-1,(c.y1*f+5)|0);
     for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)wall[y*MW+x]=1;});
-  // 3. échelle : médiane des tailles de boîtes de portes ≈ 0,95 m
-  const dws=dets.filter(c=>c.kind==='door').map(c=>((c.x1-c.x0)+(c.y1-c.y0))/2).sort((a,b)=>a-b);
-  let pxm=forcedPxm;
-  if(!pxm){
-    if(dws.length>=2)pxm=dws[dws.length>>1]/0.95;
-    else{const t=parseFloat(prompt('Aucune porte fiable : largeur totale du plan en mètres ?','12'));
-         pxm=(wx1-wx0)/f/(t||12);}}
-  const M=x=>x/f/pxm;                              // px image → mètres
-  const MX=x=>M(x-wx0/f), MY=y=>M(y-wy0/f);        // origine = coin des murs
-  // 4. extérieur par remplissage depuis les bords
-  const lab=new Int32Array(MW*MH);                 // 0 ?, -1 dehors, n>0 pièce
+  // 2. extérieur + composantes intérieures (EN PIXELS d'abord)
+  const lab=new Int32Array(MW*MH);
   const q=[];
   for(let x=0;x<MW;x++){q.push(x,(MH-1)*MW+x);}
   for(let y=0;y<MH;y++){q.push(y*MW,y*MW+MW-1);}
@@ -184,7 +201,6 @@ function buildPlan(dets,im,forcedPxm){
     const x=i%MW,y=(i/MW)|0;
     if(x>0)q.push(i-1);if(x<MW-1)q.push(i+1);
     if(y>0)q.push(i-MW);if(y<MH-1)q.push(i+MW);}
-  // 5. composantes intérieures = pièces
   const comps=[];let id=0;
   for(let s=0;s<MW*MH;s++){
     if(lab[s]||wall[s])continue;
@@ -198,22 +214,76 @@ function buildPlan(dets,im,forcedPxm){
         if(nx<0||ny<0||nx>=MW||ny>=MH)return;
         const j=ny*MW+nx;
         if(!lab[j]&&!wall[j]){lab[j]=id;st2.push(j);}});}
-    const w=(bx1-bx0)/pxm,h=(by1-by0)/pxm,area=n/(pxm*pxm);
-    if(area<1.0||Math.min(w,h)<0.65||area>120)continue;
-    comps.push({rect:[M(bx0/f)-M(wx0/f),M(by0/f)-M(wy0/f),
-                      M(bx1/f)-M(wx0/f),M(by1/f)-M(wy0/f)],
-                area:+area.toFixed(1),fixtures:[],doors:[],windows:[],
-                pxbox:[bx0/f,by0/f,bx1/f,by1/f]});}
+    comps.push({npix:n,pxbox:[bx0/f,by0/f,bx1/f,by1/f]});}
   if(!comps.length){st.textContent+=' · reconstruction impossible (aucune pièce close)';return;}
-  // 6. ouvertures → mur de pièce le plus proche (portes recopiées des 2 côtés)
-  const hull=[MX(wx0/f),MY(wy0/f),MX(wx1/f),MY(wy1/f)];
+  // 3. ÉCHELLE : m² imprimés (OCR) > portes > correction manuelle
+  const areaLabels=[];      // {x,y,val} en px image
+  const fixDec=(t,v)=>(!t.includes('.')&&v>=100)?v/100:v;   // « 571 » = 5.71 (point perdu)
+  for(let i=0;i<words.length;i++){
+    const t=words[i].t.replace(',','.');
+    let m=t.match(/^(\d{1,4}(?:\.\d{1,2})?)m/);
+    if(m){areaLabels.push({x:words[i].x,y:words[i].y,val:fixDec(m[1],+m[1])});continue;}
+    if(/^\d{1,4}(\.\d{1,2})?$/.test(t)&&words[i+1]&&/m/i.test(words[i+1].t)
+       &&Math.abs(words[i+1].y-words[i].y)<14)
+      areaLabels.push({x:words[i].x,y:words[i].y,val:fixDec(t,+t)});}
+  let pxm=forcedPxm,src='corrigée';
+  if(!pxm){
+    const est=[];
+    comps.forEach(r=>{
+      const inside=areaLabels.filter(a=>a.x>r.pxbox[0]&&a.x<r.pxbox[2]&&
+                                        a.y>r.pxbox[1]&&a.y<r.pxbox[3]&&a.val>=1.5);
+      if(inside.length===1){
+        const bA=(r.pxbox[2]-r.pxbox[0])*(r.pxbox[3]-r.pxbox[1]);
+        est.push(Math.sqrt(bA/inside[0].val));}});
+    est.sort((a,b)=>a-b);
+    window._dbg={est:est.slice(),areaLabels};
+    // robustesse : médiane puis rejet des estimations à ±25 % de la médiane
+    if(est.length>=2){
+      const med=est[est.length>>1];
+      const ok=est.filter(v=>Math.abs(v-med)/med<0.25);
+      if(ok.length>=2){pxm=ok.reduce((s,v)=>s+v,0)/ok.length;src='m² imprimés';}}
+  }
+  if(!pxm){
+    const dws=dets.filter(c=>c.kind==='door').map(c=>((c.x1-c.x0)+(c.y1-c.y0))/2).sort((a,b)=>a-b);
+    if(dws.length>=2){pxm=dws[Math.floor(dws.length*0.8)]/0.95;src='largeur portes';}
+    else{const t=parseFloat(prompt('Largeur totale du plan en mètres ?','12'));
+         pxm=(wx1-wx0)/f/(t||12);src='largeur totale';}}
+  const MX=x=>(x-wx0/f)/pxm, MY=y=>(y-wy0/f)/pxm;
+  // 4. rects en mètres + filtres
+  let rooms=comps.map(r=>({npix:r.npix,pxbox:r.pxbox,
+    rect:[MX(r.pxbox[0]),MY(r.pxbox[1]),MX(r.pxbox[2]),MY(r.pxbox[3])],
+    doors:[],windows:[],fixtures:[]}))
+    .filter(r=>{const w=r.rect[2]-r.rect[0],h=r.rect[3]-r.rect[1];
+      const a=r.npix/(f*f*pxm*pxm);
+      r.area=+a.toFixed(1);
+      return a>=1.0&&Math.min(w,h)>=0.6&&a<=130;});
+  if(!rooms.length){st.textContent+=' · reconstruction impossible';return;}
+  // 5. SOUDURE des murs partagés : les bords proches fusionnent sur un axe commun
+  ['x','y'].forEach(ax=>{
+    const idx=ax==='x'?[0,2]:[1,3];
+    const vals=[];rooms.forEach(r=>idx.forEach(k=>vals.push(r.rect[k])));
+    vals.sort((a,b)=>a-b);
+    const groups=[];let cur=[vals[0]];
+    for(let i=1;i<vals.length;i++){
+      if(vals[i]-cur[cur.length-1]<=0.6)cur.push(vals[i]);
+      else{groups.push(cur);cur=[vals[i]];}}
+    groups.push(cur);
+    const snapv=v=>{for(const gp of groups)
+      if(v>=gp[0]-1e-6&&v<=gp[gp.length-1]+1e-6)
+        return gp.reduce((s,x)=>s+x,0)/gp.length;return v;};
+    rooms.forEach(r=>idx.forEach(k=>r.rect[k]=+snapv(r.rect[k]).toFixed(2)));});
+  rooms=rooms.filter(r=>r.rect[2]-r.rect[0]>=0.5&&r.rect[3]-r.rect[1]>=0.5);
+  rooms.forEach(r=>{r.area=+((r.rect[2]-r.rect[0])*(r.rect[3]-r.rect[1])).toFixed(1);});
+  // 6. ouvertures → murs (recopiées des 2 côtés d'un mur partagé)
+  const hull=[Math.min(...rooms.map(r=>r.rect[0])),Math.min(...rooms.map(r=>r.rect[1])),
+              Math.max(...rooms.map(r=>r.rect[2])),Math.max(...rooms.map(r=>r.rect[3]))];
   let entry=null;
   const edgeOf=(rc,wl)=>({N:[rc[0],rc[1],rc[2],rc[1]],S:[rc[0],rc[3],rc[2],rc[3]],
                           W:[rc[0],rc[1],rc[0],rc[3]],E:[rc[2],rc[1],rc[2],rc[3]]}[wl]);
   dets.filter(c=>c.kind!=='fixture').forEach(c=>{
     const mx=MX((c.x0+c.x1)/2),my=MY((c.y0+c.y1)/2);
     const hits=[];
-    comps.forEach(r=>{['N','S','W','E'].forEach(wl=>{
+    rooms.forEach(r=>{['N','S','W','E'].forEach(wl=>{
       const[ax,ay,bx,by]=edgeOf(r.rect,wl);
       let dist,t;
       if(ay===by){t=(mx-Math.min(ax,bx))/Math.abs(bx-ax);dist=Math.abs(my-ay);}
@@ -223,11 +293,11 @@ function buildPlan(dets,im,forcedPxm){
     if(!hits.length)return;
     const key=c.kind==='door'?'doors':'windows';
     const seen=new Set();
-    hits.slice(0,2).forEach(h=>{                    // les 2 côtés d'un mur partagé
+    hits.slice(0,2).forEach(h=>{
       if(seen.has(h.r))return;seen.add(h.r);
       h.r[key].push({wall:h.wl,at:+h.t.toFixed(2)});});
     if(c.kind==='door'&&hits.length===1){
-      const dh=[my-hull[1],hull[3]-my,mx-hull[0],hull[2]-mx];  // N,S,W,E
+      const dh=[my-hull[1],hull[3]-my,mx-hull[0],hull[2]-mx];
       const k=dh.indexOf(Math.min(...dh));
       if(dh[k]<0.6)entry=k<2?{edge:'NS'[k],x:+mx.toFixed(2)}:{edge:'WE'[k-2],y:+my.toFixed(2)};}
   });
@@ -240,39 +310,60 @@ function buildPlan(dets,im,forcedPxm){
     const cls=c.cls.toLowerCase();
     const k=Object.keys(KIND).find(k=>cls.includes(k));if(!k)return;
     const mx=MX((c.x0+c.x1)/2),my=MY((c.y0+c.y1)/2);
-    const room=comps.find(r=>mx>r.rect[0]&&mx<r.rect[2]&&my>r.rect[1]&&my<r.rect[3]);
+    const room=rooms.find(r=>mx>r.rect[0]&&mx<r.rect[2]&&my>r.rect[1]&&my<r.rect[3]);
     if(!room)return;
     const dists={N:my-room.rect[1],S:room.rect[3]-my,W:mx-room.rect[0],E:room.rect[2]-mx};
     const wl=Object.keys(dists).sort((a,b)=>dists[a]-dists[b])[0];
     room.fixtures.push({item:KIND[k][0],kind:KIND[k][1],
       rect:[+MX(c.x0).toFixed(2),+MY(c.y0).toFixed(2),+MX(c.x1).toFixed(2),+MY(c.y1).toFixed(2)],
       h:KIND[k][1]==='fridge'?1.85:0.85,wall:wl});});
-  // 8. noms : équipements → taille → portes
-  comps.forEach(r=>{const has=k=>r.fixtures.some(fx=>fx.kind===k);
+  // 8. NOMS : d'abord les libellés lus sur le plan (OCR), puis heuristiques
+  const LEX=[[/(LIVING|SEJOUR|SÉJOUR|SALON)/i,'LIVING ROOM'],[/BEDROOM|CHAMBRE/i,'BEDROOM'],
+    [/KITCHEN|CUISINE/i,'KITCHEN'],[/BATH|S\.?D\.?B|BAIN/i,'BATHROOM'],
+    [/SHOWER|DOUCHE/i,'SHOWER ROOM'],[/^W\.?C\.?$/i,'WC'],[/HALL|ENTR|COULOIR|DGT/i,'HALL'],
+    [/CHANGING|DRESSING/i,'CHANGING ROOM'],[/CELLIER|STORAGE/i,'CELLIER'],
+    [/OFFICE|BUREAU/i,'BUREAU'],[/DINING/i,'DINING ROOM']];
+  rooms.forEach(r=>{
+    const inside=words.filter(w=>{const x=w.x,y=w.y;
+      return x>r.pxbox[0]&&x<r.pxbox[2]&&y>r.pxbox[1]&&y<r.pxbox[3];});
+    const txt=inside.map(w=>w.t).join(' ');
+    for(const[re,name]of LEX)if(re.test(txt)){
+      r.name=name;
+      if(name==='BEDROOM'){const num=txt.match(/BEDROOM\s*(\d)|CHAMBRE\s*(\d)/i);
+        if(num)r.name='BEDROOM '+(num[1]||num[2]);}
+      break;}});
+  rooms.forEach(r=>{if(/(SHOWER|WC|BATHROOM)/.test(r.name||'')&&r.area>7)r.name=null;});
+  rooms.forEach(r=>{if(r.name)return;const has=k=>r.fixtures.some(fx=>fx.kind===k);
     if(has('toilet')&&r.area<3.5&&!has('bathtub'))r.name='WC';
     else if(has('bathtub'))r.name='BATHROOM';
     else if(has('shower'))r.name='SHOWER ROOM';
     else if(has('counter')||has('fridge'))r.name='KITCHEN';});
-  const hall=comps.filter(r=>!r.name).sort((a,b)=>b.doors.length-a.doors.length)[0];
-  if(hall&&hall.doors.length>=3)hall.name='HALL';
-  comps.filter(r=>!r.name&&r.area<2.2).forEach(r=>r.name='WC');
-  const un=comps.filter(r=>!r.name).sort((a,b)=>b.area-a.area);
-  if(un[0])un[0].name='LIVING ROOM';
-  un.slice(1).forEach((r,i)=>r.name='BEDROOM '+(i+1));
-  // 9. plan.json + tracé + bouton
+  const hallR=rooms.filter(r=>!r.name).sort((a,b)=>b.doors.length-a.doors.length)[0];
+  if(hallR&&hallR.doors.length>=3)hallR.name='HALL';
+  rooms.filter(r=>!r.name&&r.area<2.2).forEach(r=>r.name='WC');
+  const un=rooms.filter(r=>!r.name).sort((a,b)=>b.area-a.area);
+  if(un[0]&&!rooms.some(r=>r.name==='LIVING ROOM'))un.shift().name='LIVING ROOM';
+  let bi=rooms.filter(r=>/^BEDROOM \d/.test(r.name||'')).length;
+  un.forEach(r=>r.name='BEDROOM '+(++bi));
+  rooms.forEach((r,i)=>{if(r.name==='BEDROOM')r.name='BEDROOM '+(++bi);});
+  // dédoublonner les noms identiques
+  const cnt={};rooms.forEach(r=>{cnt[r.name]=(cnt[r.name]||0)+1;
+    if(cnt[r.name]>1)r.name+=' ('+cnt[r.name]+')';});
+  // 9. plan.json + tracé + boutons
   const model={project:'Plan importé (détection navigateur)',units:'m',wall_height:2.5,
-    rooms:comps.map(r=>({name:r.name,area_m2:r.area,rect:r.rect.map(v=>+v.toFixed(2)),
+    rooms:rooms.map(r=>({name:r.name,area_m2:r.area,rect:r.rect,
       doors:r.doors,windows:r.windows,furniture:r.fixtures}))};
   if(entry)model.entry=entry;
   g.strokeStyle='#d81b60';g.lineWidth=Math.max(2,im.width/700);g.setLineDash([8,5]);
-  comps.forEach(r=>{g.strokeRect(r.pxbox[0],r.pxbox[1],
+  g.font=(im.width/70|0)+'px system-ui';
+  rooms.forEach(r=>{g.strokeRect(r.pxbox[0],r.pxbox[1],
     r.pxbox[2]-r.pxbox[0],r.pxbox[3]-r.pxbox[1]);
-    g.fillStyle='#d81b60';g.fillText(r.name+' '+r.area+' m²',r.pxbox[0]+4,r.pxbox[1]+14/f*0+18);});
+    g.fillStyle='#d81b60';g.fillText(r.name+' '+r.area+' m²',r.pxbox[0]+4,r.pxbox[1]+16);});
   g.setLineDash([]);
   const totW=((wx1-wx0)/f/pxm).toFixed(2);
-  st.innerHTML=st.textContent+
-    ` · ${comps.length} pièces · largeur estimée ${totW} m `+
-    `<a href="#" id="fixscale" style="color:#7fb3ff">corriger</a>`;
+  const base=st.textContent.split(' · ').slice(0,3).join(' · ');
+  st.innerHTML=`${base} · ${rooms.length} pièces · échelle par ${src} `+
+    `· largeur ${totW} m <a href="#" id="fixscale" style="color:#7fb3ff">corriger</a>`;
   document.getElementById('fixscale').onclick=e=>{e.preventDefault();
     const t=parseFloat(prompt('Largeur totale réelle du plan (m) ?',totW));
     if(t>0)buildPlan(lastDets,lastIm,(wx1-wx0)/f/t);};
