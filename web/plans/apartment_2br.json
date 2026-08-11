@@ -74,7 +74,7 @@
       "name": "WC",
       "area_m2": 1.87,
       "rect": [9.96, 4.95, 10.88, 6.98],
-      "doors": [{ "wall": "W", "at": 0.5 }],
+      "doors": [{ "wall": "N", "at": 0.5 }],
       "windows": [],
       "furniture": [
         { "item": "wc", "kind": "toilet", "rect": [10.2, 5.02, 10.64, 5.7], "h": 0.78, "wall": "N" }
