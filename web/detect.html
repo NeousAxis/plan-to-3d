@@ -19,10 +19,15 @@
   <span class="sep"></span>
   <label class="btn">Charger un plan…<input id="f" type="file" accept="image/*" hidden></label>
   <button id="dl" disabled>Télécharger le JSON</button>
-  <button id="go3d" disabled style="background:#2f7d4f">🏠 Ouvrir en 3D + visite</button>
+  <button id="go3d" disabled style="background:#2f7d4f">🏠 Ébauche 3D + visite (approximatif)</button>
   <span id="st">chargement du modèle (13 Mo, une seule fois)…</span>
 </header>
 <main>
+  <div style="margin:8px 2px;font-size:12.5px;color:#a33">
+    ⚠ La reconstruction 3D automatique est une ÉBAUCHE : géométrie approximative,
+    noms parfois faux. Pour un plan exact au centimètre : le skill plan-to-3d
+    (lecture des cotes + audit) produit le plan.json fidèle, à glisser dans cad.html.
+  </div>
   <div id="legend">
     <span class="sw" style="background:#0aa84f"></span>portes
     <span class="sw" style="background:#1e5ae6"></span>fenêtres / vitrages
