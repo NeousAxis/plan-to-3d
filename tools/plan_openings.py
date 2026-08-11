@@ -24,6 +24,25 @@ DOOR_CLASSES = ("door",)          # 'door swing beside', 'doors', ...
 WIN_CLASSES = ("window", "glass")  # 'window regular', 'glass', ...
 
 
+def dets_from_file(path):
+    """Détections issues de la page web publique (detect.html → detections.json).
+
+    Zéro dépendance modèle : c'est LE chemin pour un utilisateur sans venv,
+    la détection ayant tourné dans SON navigateur.
+    """
+    data = json.load(open(path))
+    out = []
+    for d in data.get("detections", []):
+        if d.get("kind") not in ("door", "window"):
+            continue
+        x0, y0, x1, y1 = d["bbox"]
+        out.append({"kind": d["kind"], "class": d.get("class", ""),
+                    "conf": float(d.get("conf", 0.5)),
+                    "cx": (x0 + x1) / 2, "cy": (y0 + y1) / 2,
+                    "w": x1 - x0, "h": y1 - y0})
+    return out
+
+
 def load_detections(image_path, conf=0.25):
     from huggingface_hub import hf_hub_download
     from ultralytics import YOLO
@@ -114,6 +133,9 @@ def main():
     ap.add_argument("-o", "--out", help="écrit le plan.json mis à jour (sinon dry-run)")
     ap.add_argument("--conf", type=float, default=0.25)
     ap.add_argument("--snap", type=float, default=0.55, help="distance max de snap (m)")
+    ap.add_argument("--detections",
+                    help="detections.json de la page web (detect.html) : "
+                         "aucun modèle local requis")
     args = ap.parse_args()
 
     from PIL import Image
@@ -126,7 +148,8 @@ def main():
     Xpx = lambda x: px1 + (x - mx1) * sx
     Ypx = lambda y: py1 + (y - my1) * sy
 
-    dets = dedupe(load_detections(args.image, args.conf))
+    dets = dedupe(dets_from_file(args.detections) if args.detections
+                  else load_detections(args.image, args.conf))
     rooms = [r for r in model["rooms"] if r.get("rect")]
     prev_doors = {id(r): list(r.get("doors", [])) for r in rooms}
     for r in rooms:

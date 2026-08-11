@@ -1,38 +1,71 @@
 ---
-name: plan-to-image
+name: plan-to-3d
 description: >-
-  Convert a 2D building/floor plan into photoreal interior renders, one per
-  room, by composing pro-grade archviz prompts (style, materials, lighting,
-  furniture, palette, camera) and shipping them to a free image model
-  (Pollinations.ai FLUX). Use whenever the user provides a floor plan and
-  wants magazine-quality interior images per room — no rendering engine, no
-  3D modelling. The user can edit each room's prompt parts and re-generate.
+  Convert a 2D floor plan (raster image) into a FAITHFUL 3D model with a
+  first-person virtual visit (PlanCAD web app), plus optional photoreal
+  interior renders. The chain is fully free and installation-free for the
+  user: openings are detected by a specialized model running in the BROWSER
+  (public page), geometry is solved from the printed dimensions, an overlay
+  audit against the source image is MANDATORY before showing any 3D, and
+  the result opens in cad.html (2D + 3D + walkthrough). Use whenever the
+  user provides a floor plan and wants a 3D model, a virtual visit, a DXF,
+  or photoreal renders.
 ---
 
-# plan-to-image
+# plan-to-3d
 
-Turn a 2D plan into AD-grade interior renders. The pipeline is:
+Turn a 2D plan into a faithful 3D + virtual visit, then (optionally)
+AD-grade interior renders. **Fidelity first: never hand-transcribe a plan,
+never show a 3D that has not passed the overlay audit.**
 
 ```
-plan file  ->  [you read it]  ->  spec.json (per-room prompt parts)
-           ->  plan_to_image.py  ->  one PNG per room + gallery.html
+plan.png ─► 1. rooms+dims  (plan_reader / printed dims solver)
+         ─► 2. openings    (detections from the PUBLIC browser page or local model)
+         ─► 3. AUDIT       (plan_audit overlay vs source image — MANDATORY)
+         ─► 4. 3D + visite (web/cad.html : 2D+3D synchro, Visiter, ?shot=tour)
+         ─► 5. (option) photoreal renders per room (FLUX, free)
 ```
 
-This skill replaced the old geometric `plan-to-3d` pipeline (kept under
-`legacy_3d/` for reference — it produces an interactive 3D viewer but never
-reached photoreal quality without a lot of plumbing). The new approach uses
-**FLUX via Pollinations.ai** (free, anonymous, no API key) and composes
-prompts from a structured **`vocabulary.json`** of architecture-and-design
-terminology (styles, materials, lighting, furniture, colours, camera shots).
+## Zero-install path (what the user's friends use)
 
-## When to use
+- **Detection online** : https://neousaxis.github.io/plan-to-3d/detect.html
+  → drop the plan image, detection runs in THEIR browser (ONNX 13 MB from
+  `NeousAxis/plan-openings-onnx`), button « Télécharger le JSON ».
+- **Viewer online** : https://neousaxis.github.io/plan-to-3d/cad.html
+  → drag-drop any `plan.json` : 2D pro + 3D dollhouse + « Visiter »
+  (first-person walkthrough, ZQSD + mouse).
 
-The user hands over a plan (image, PDF, screenshot) and wants believable
-interior renders — typical asks: "show me what this could look like",
-"design this apartment in japandi style", "give me a photoreal preview".
-Each room becomes one image.
+## Full chain (what YOU run, in order)
 
-## Workflow
+```bash
+# 1. rooms + dimensions (dimensioned plans only; else ask the user for one cote)
+python3 plan_reader.py read plan.png -o web/plans/x.json
+
+# 2. openings from detections (detections.json = downloaded from detect.html)
+python3 tools/plan_openings.py web/plans/x.json plan.png \
+        --detections detections.json -o web/plans/x.json
+#    (without --detections: runs the local model if work/_seg_venv exists)
+
+# 3. MANDATORY audit — look at the overlay, fix, re-audit until it matches
+python3 tools/plan_audit.py web/plans/x.json plan.png -o overlay.png
+
+# 4. 3D + virtual visit (+ batch captures)
+cd web && python3 -m http.server 8777          # http://localhost:8777/cad.html?plan=plans/x.json
+python3 tools/shot_server.py &                  # then open ...&shot=tour → 1 PNG dollhouse + 1/room
+```
+
+Rules learned the hard way (sessions #3-#5): plans without printed dims →
+do NOT trust guessed numbers, ask for one known dimension; the audit
+overlay (rooms red, doors green, windows blue, furniture orange, entry
+magenta) is the only accepted proof of fidelity; `MODEL.entry` carries the
+front door; label-only HALL rooms get floor/walls/spots automatically.
+
+## Optional step 5 — photoreal renders (plan-to-image)
+
+Turn each room into an AD-grade image with **FLUX via Pollinations.ai**
+(free, anonymous, no API key), composing prompts from `vocabulary.json`.
+Never call these renders "faithful": they are dressing, the geometry truth
+lives in the 3D above.
 
 ### 1. Read the plan
 
