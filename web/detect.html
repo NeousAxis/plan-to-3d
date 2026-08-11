@@ -201,7 +201,7 @@ function buildPlan(dets,im,forcedPxm){
     const x=i%MW,y=(i/MW)|0;
     if(x>0)q.push(i-1);if(x<MW-1)q.push(i+1);
     if(y>0)q.push(i-MW);if(y<MH-1)q.push(i+MW);}
-  const comps=[];let id=0;
+  const comps=[];let id=0,maxId=0;
   for(let s=0;s<MW*MH;s++){
     if(lab[s]||wall[s])continue;
     id++;const st2=[s];lab[s]=id;
@@ -214,7 +214,48 @@ function buildPlan(dets,im,forcedPxm){
         if(nx<0||ny<0||nx>=MW||ny>=MH)return;
         const j=ny*MW+nx;
         if(!lab[j]&&!wall[j]){lab[j]=id;st2.push(j);}});}
-    comps.push({npix:n,pxbox:[bx0/f,by0/f,bx1/f,by1/f]});}
+    comps.push({id,npix:n,pxbox:[bx0/f,by0/f,bx1/f,by1/f]});maxId=id;}
+  // anti-fusion : une composante qui contient DEUX libellés de pièces
+  // différents est coupée sur la ligne de mur quasi continue entre eux
+  const BIG=/(LIVING|KITCHEN|BEDROOM|CHAMBRE|SEJOUR|SÉJOUR|SALON|CUISINE|DINING|OFFICE|BUREAU|BATH|SHOWER|CHANGING|DRESSING)/i;
+  const bigWords=words.filter(w=>BIG.test(w.t));
+  for(let pass=0;pass<3;pass++){
+    let done=true;
+    for(const c of comps){
+      const inside=bigWords.filter(w=>w.x>c.pxbox[0]&&w.x<c.pxbox[2]&&
+                                      w.y>c.pxbox[1]&&w.y<c.pxbox[3]);
+      const kindOfW=w=>(w.t.match(BIG)||[])[1]?.toUpperCase();
+      if(new Set(inside.map(kindOfW)).size<2)continue;
+      let A=null,Bw=null,dm=-1;
+      for(const q1 of inside)for(const q2 of inside){
+        if(kindOfW(q1)===kindOfW(q2))continue;
+        const dd=(q1.x-q2.x)**2+(q1.y-q2.y)**2;
+        if(dd>dm){dm=dd;A=q1;Bw=q2;}}
+      if(!A)continue;
+      const vert=Math.abs(A.x-Bw.x)>=Math.abs(A.y-Bw.y);
+      const b0=[c.pxbox[0]*f|0,c.pxbox[1]*f|0,c.pxbox[2]*f|0,c.pxbox[3]*f|0];
+      let best=null;
+      const lo=(vert?Math.min(A.x,Bw.x):Math.min(A.y,Bw.y))*f+8;
+      const hi=(vert?Math.max(A.x,Bw.x):Math.max(A.y,Bw.y))*f-8;
+      for(let pos=lo|0;pos<=hi;pos+=2){
+        let open=0;
+        if(vert){for(let y=b0[1];y<=b0[3];y++)if(lab[y*MW+pos]===c.id)open++;}
+        else{for(let x=b0[0];x<=b0[2];x++)if(lab[pos*MW+x]===c.id)open++;}
+        if(best===null||open<best.open)best={open,pos};}
+      const span=vert?(b0[3]-b0[1]):(b0[2]-b0[0]);
+      if(!best||best.open>Math.max(6,span*0.18))continue;
+      const nid=++maxId;
+      let n1=0,d0=1e9,d1=1e9,d2=-1,d3=-1,n2=0,e0=1e9,e1=1e9,e2=-1,e3=-1;
+      for(let y=b0[1];y<=b0[3];y++)for(let x=b0[0];x<=b0[2];x++){
+        const i=y*MW+x;if(lab[i]!==c.id)continue;
+        if(vert?(x>best.pos):(y>best.pos)){lab[i]=nid;n2++;
+          e0=Math.min(e0,x);e1=Math.min(e1,y);e2=Math.max(e2,x);e3=Math.max(e3,y);}
+        else{n1++;d0=Math.min(d0,x);d1=Math.min(d1,y);d2=Math.max(d2,x);d3=Math.max(d3,y);}}
+      if(n1<50||n2<50)continue;
+      c.npix=n1;c.pxbox=[d0/f,d1/f,d2/f,d3/f];
+      comps.push({id:nid,npix:n2,pxbox:[e0/f,e1/f,e2/f,e3/f]});
+      done=false;break;}
+    if(done)break;}
   if(!comps.length){st.textContent+=' · reconstruction impossible (aucune pièce close)';return;}
   // 3. ÉCHELLE : m² imprimés (OCR) > portes > correction manuelle
   const areaLabels=[];      // {x,y,val} en px image
@@ -233,7 +274,8 @@ function buildPlan(dets,im,forcedPxm){
       const inside=areaLabels.filter(a=>a.x>r.pxbox[0]&&a.x<r.pxbox[2]&&
                                         a.y>r.pxbox[1]&&a.y<r.pxbox[3]&&a.val>=1.5);
       if(inside.length===1){
-        const bA=(r.pxbox[2]-r.pxbox[0])*(r.pxbox[3]-r.pxbox[1]);
+        const E=2.5/f;
+        const bA=(r.pxbox[2]-r.pxbox[0]+2*E)*(r.pxbox[3]-r.pxbox[1]+2*E);
         est.push(Math.sqrt(bA/inside[0].val));}});
     est.sort((a,b)=>a-b);
     window._dbg={est:est.slice(),areaLabels};
@@ -250,13 +292,14 @@ function buildPlan(dets,im,forcedPxm){
          pxm=(wx1-wx0)/f/(t||12);src='largeur totale';}}
   const MX=x=>(x-wx0/f)/pxm, MY=y=>(y-wy0/f)/pxm;
   // 4. rects en mètres + filtres
+  const EPX=2.5/f;                        // compense l'érosion du masque
   let rooms=comps.map(r=>({npix:r.npix,pxbox:r.pxbox,
-    rect:[MX(r.pxbox[0]),MY(r.pxbox[1]),MX(r.pxbox[2]),MY(r.pxbox[3])],
+    rect:[MX(r.pxbox[0]-EPX),MY(r.pxbox[1]-EPX),MX(r.pxbox[2]+EPX),MY(r.pxbox[3]+EPX)],
     doors:[],windows:[],fixtures:[]}))
     .filter(r=>{const w=r.rect[2]-r.rect[0],h=r.rect[3]-r.rect[1];
-      const a=r.npix/(f*f*pxm*pxm);
+      const a=w*h;
       r.area=+a.toFixed(1);
-      return a>=1.0&&Math.min(w,h)>=0.6&&a<=130;});
+      return a>=0.8&&Math.min(w,h)>=0.55&&a<=130;});
   if(!rooms.length){st.textContent+=' · reconstruction impossible';return;}
   // 5. SOUDURE des murs partagés : les bords proches fusionnent sur un axe commun
   ['x','y'].forEach(ax=>{
@@ -265,7 +308,7 @@ function buildPlan(dets,im,forcedPxm){
     vals.sort((a,b)=>a-b);
     const groups=[];let cur=[vals[0]];
     for(let i=1;i<vals.length;i++){
-      if(vals[i]-cur[cur.length-1]<=0.6)cur.push(vals[i]);
+      if(vals[i]-cur[cur.length-1]<=0.45)cur.push(vals[i]);
       else{groups.push(cur);cur=[vals[i]];}}
     groups.push(cur);
     const snapv=v=>{for(const gp of groups)
@@ -273,6 +316,24 @@ function buildPlan(dets,im,forcedPxm){
         return gp.reduce((s,x)=>s+x,0)/gp.length;return v;};
     rooms.forEach(r=>idx.forEach(k=>r.rect[k]=+snapv(r.rect[k]).toFixed(2)));});
   rooms=rooms.filter(r=>r.rect[2]-r.rect[0]>=0.5&&r.rect[3]-r.rect[1]>=0.5);
+  // soudure par paires de bords en vis-à-vis (gap = mur + érosion),
+  // sauf si une troisième pièce occupe l'entre-deux (couloir réel)
+  const occupied=(x0,y0,x1,y1,a,b)=>rooms.some(r=>r!==a&&r!==b&&
+    Math.min(r.rect[2],x1)-Math.max(r.rect[0],x0)>0.05&&
+    Math.min(r.rect[3],y1)-Math.max(r.rect[1],y0)>0.05);
+  for(let pass=0;pass<2;pass++)
+    for(const a of rooms)for(const b of rooms){
+      if(a===b)continue;
+      const ovY=Math.min(a.rect[3],b.rect[3])-Math.max(a.rect[1],b.rect[1]);
+      if(ovY>0.5){const gap=b.rect[0]-a.rect[2];
+        if(gap>0.01&&gap<1.0&&!occupied(a.rect[2],Math.max(a.rect[1],b.rect[1]),
+            b.rect[0],Math.min(a.rect[3],b.rect[3]),a,b)){
+          const m=+((a.rect[2]+b.rect[0])/2).toFixed(2);a.rect[2]=m;b.rect[0]=m;}}
+      const ovX=Math.min(a.rect[2],b.rect[2])-Math.max(a.rect[0],b.rect[0]);
+      if(ovX>0.5){const gap=b.rect[1]-a.rect[3];
+        if(gap>0.01&&gap<1.0&&!occupied(Math.max(a.rect[0],b.rect[0]),a.rect[3],
+            Math.min(a.rect[2],b.rect[2]),b.rect[1],a,b)){
+          const m=+((a.rect[3]+b.rect[1])/2).toFixed(2);a.rect[3]=m;b.rect[1]=m;}}}
   rooms.forEach(r=>{r.area=+((r.rect[2]-r.rect[0])*(r.rect[3]-r.rect[1])).toFixed(1);});
   // 6. ouvertures → murs (recopiées des 2 côtés d'un mur partagé)
   const hull=[Math.min(...rooms.map(r=>r.rect[0])),Math.min(...rooms.map(r=>r.rect[1])),
