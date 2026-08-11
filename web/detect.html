@@ -19,6 +19,7 @@
   <span class="sep"></span>
   <label class="btn">Charger un plan…<input id="f" type="file" accept="image/*" hidden></label>
   <button id="dl" disabled>Télécharger le JSON</button>
+  <button id="go3d" disabled style="background:#2f7d4f">🏠 Ouvrir en 3D + visite</button>
   <span id="st">chargement du modèle (13 Mo, une seule fois)…</span>
 </header>
 <main>
@@ -129,6 +130,155 @@ async function run(im){
   dl.onclick=()=>{const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([JSON.stringify(lastJSON,null,1)],{type:'application/json'}));
     a.download='detections.json';a.click();};
+  _snap=null;
+  buildPlan(keep,im);
+}
+
+/* ─── reconstruction : image + détections → plan.json → PlanCAD ───
+   pièces = zones closes entre les murs (les ouvertures détectées ferment
+   les trous), échelle = largeur standard des portes (~0,95 m). */
+let lastDets=null,lastIm=null,_snap=null;
+function buildPlan(dets,im,forcedPxm){
+  lastDets=dets;lastIm=im;
+  if(!_snap)_snap=g.getImageData(0,0,cv.width,cv.height);
+  else g.putImageData(_snap,0,0);          // rebuild : repartir des détections
+  // 1. masque murs (bleu nuit OU sombre) sur grille réduite
+  const MW=Math.min(1100,im.width), f=MW/im.width, MH=Math.round(im.height*f);
+  const c2=document.createElement('canvas');c2.width=MW;c2.height=MH;
+  const G=c2.getContext('2d');G.drawImage(im,0,0,MW,MH);
+  const d=G.getImageData(0,0,MW,MH).data;
+  const wall=new Uint8Array(MW*MH);
+  let wx0=1e9,wy0=1e9,wx1=-1,wy1=-1;
+  for(let i=0;i<MW*MH;i++){
+    const r=d[i*4],g0=d[i*4+1],b=d[i*4+2];
+    const navy=r<110&&g0<110&&b-r>=25, dark=r<95&&g0<95&&b<125;
+    if(navy||dark)wall[i]=1;
+    if(navy){const x=i%MW,y=(i/MW)|0;
+      if(x<wx0)wx0=x;if(x>wx1)wx1=x;if(y<wy0)wy0=y;if(y>wy1)wy1=y;}}
+  if(wx1<0){st.textContent+=' · reconstruction impossible (murs introuvables)';return;}
+  // dilatation 1 px : bouche les micro-fuites d'anticrénelage
+  {const w2=new Uint8Array(wall);
+   for(let y=1;y<MH-1;y++)for(let x=1;x<MW-1;x++){const i=y*MW+x;
+     if(w2[i]||w2[i-1]||w2[i+1]||w2[i-MW]||w2[i+MW])wall[i]=1;}}
+  // 2. les ouvertures détectées deviennent des murs (fermer les pièces)
+  dets.filter(c=>c.kind!=='fixture').forEach(c=>{
+    const x0=Math.max(0,(c.x0*f-5)|0),x1=Math.min(MW-1,(c.x1*f+5)|0);
+    const y0=Math.max(0,(c.y0*f-5)|0),y1=Math.min(MH-1,(c.y1*f+5)|0);
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)wall[y*MW+x]=1;});
+  // 3. échelle : médiane des tailles de boîtes de portes ≈ 0,95 m
+  const dws=dets.filter(c=>c.kind==='door').map(c=>((c.x1-c.x0)+(c.y1-c.y0))/2).sort((a,b)=>a-b);
+  let pxm=forcedPxm;
+  if(!pxm){
+    if(dws.length>=2)pxm=dws[dws.length>>1]/0.95;
+    else{const t=parseFloat(prompt('Aucune porte fiable : largeur totale du plan en mètres ?','12'));
+         pxm=(wx1-wx0)/f/(t||12);}}
+  const M=x=>x/f/pxm;                              // px image → mètres
+  const MX=x=>M(x-wx0/f), MY=y=>M(y-wy0/f);        // origine = coin des murs
+  // 4. extérieur par remplissage depuis les bords
+  const lab=new Int32Array(MW*MH);                 // 0 ?, -1 dehors, n>0 pièce
+  const q=[];
+  for(let x=0;x<MW;x++){q.push(x,(MH-1)*MW+x);}
+  for(let y=0;y<MH;y++){q.push(y*MW,y*MW+MW-1);}
+  while(q.length){const i=q.pop();
+    if(lab[i]||wall[i])continue;lab[i]=-1;
+    const x=i%MW,y=(i/MW)|0;
+    if(x>0)q.push(i-1);if(x<MW-1)q.push(i+1);
+    if(y>0)q.push(i-MW);if(y<MH-1)q.push(i+MW);}
+  // 5. composantes intérieures = pièces
+  const comps=[];let id=0;
+  for(let s=0;s<MW*MH;s++){
+    if(lab[s]||wall[s])continue;
+    id++;const st2=[s];lab[s]=id;
+    let n=0,bx0=1e9,by0=1e9,bx1=-1,by1=-1;
+    while(st2.length){const i=st2.pop();n++;
+      const x=i%MW,y=(i/MW)|0;
+      if(x<bx0)bx0=x;if(x>bx1)bx1=x;if(y<by0)by0=y;if(y>by1)by1=y;
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{
+        const nx=x+dx,ny=y+dy;
+        if(nx<0||ny<0||nx>=MW||ny>=MH)return;
+        const j=ny*MW+nx;
+        if(!lab[j]&&!wall[j]){lab[j]=id;st2.push(j);}});}
+    const w=(bx1-bx0)/pxm,h=(by1-by0)/pxm,area=n/(pxm*pxm);
+    if(area<1.0||Math.min(w,h)<0.65||area>120)continue;
+    comps.push({rect:[M(bx0/f)-M(wx0/f),M(by0/f)-M(wy0/f),
+                      M(bx1/f)-M(wx0/f),M(by1/f)-M(wy0/f)],
+                area:+area.toFixed(1),fixtures:[],doors:[],windows:[],
+                pxbox:[bx0/f,by0/f,bx1/f,by1/f]});}
+  if(!comps.length){st.textContent+=' · reconstruction impossible (aucune pièce close)';return;}
+  // 6. ouvertures → mur de pièce le plus proche (portes recopiées des 2 côtés)
+  const hull=[MX(wx0/f),MY(wy0/f),MX(wx1/f),MY(wy1/f)];
+  let entry=null;
+  const edgeOf=(rc,wl)=>({N:[rc[0],rc[1],rc[2],rc[1]],S:[rc[0],rc[3],rc[2],rc[3]],
+                          W:[rc[0],rc[1],rc[0],rc[3]],E:[rc[2],rc[1],rc[2],rc[3]]}[wl]);
+  dets.filter(c=>c.kind!=='fixture').forEach(c=>{
+    const mx=MX((c.x0+c.x1)/2),my=MY((c.y0+c.y1)/2);
+    const hits=[];
+    comps.forEach(r=>{['N','S','W','E'].forEach(wl=>{
+      const[ax,ay,bx,by]=edgeOf(r.rect,wl);
+      let dist,t;
+      if(ay===by){t=(mx-Math.min(ax,bx))/Math.abs(bx-ax);dist=Math.abs(my-ay);}
+      else{t=(my-Math.min(ay,by))/Math.abs(by-ay);dist=Math.abs(mx-ax);}
+      if(t>-0.02&&t<1.02&&dist<0.7)hits.push({r,wl,t:Math.min(Math.max(t,0.03),0.97),dist});});});
+    hits.sort((a,b)=>a.dist-b.dist);
+    if(!hits.length)return;
+    const key=c.kind==='door'?'doors':'windows';
+    const seen=new Set();
+    hits.slice(0,2).forEach(h=>{                    // les 2 côtés d'un mur partagé
+      if(seen.has(h.r))return;seen.add(h.r);
+      h.r[key].push({wall:h.wl,at:+h.t.toFixed(2)});});
+    if(c.kind==='door'&&hits.length===1){
+      const dh=[my-hull[1],hull[3]-my,mx-hull[0],hull[2]-mx];  // N,S,W,E
+      const k=dh.indexOf(Math.min(...dh));
+      if(dh[k]<0.6)entry=k<2?{edge:'NS'[k],x:+mx.toFixed(2)}:{edge:'WE'[k-2],y:+my.toFixed(2)};}
+  });
+  // 7. équipements fixes → mobilier
+  const KIND={toilet:['wc','toilet'],bathtub:['baignoire','bathtub'],tub:['baignoire','bathtub'],
+    sink:['vasque','vanity'],shower:['douche','shower'],countertop:['plan de travail','counter'],
+    basecabinet:['plan de travail','counter'],refrigerator:['réfrigérateur','fridge'],
+    closet:['penderie','wardrobe'],washingmachine:['lave-linge','generic']};
+  dets.filter(c=>c.kind==='fixture').forEach(c=>{
+    const cls=c.cls.toLowerCase();
+    const k=Object.keys(KIND).find(k=>cls.includes(k));if(!k)return;
+    const mx=MX((c.x0+c.x1)/2),my=MY((c.y0+c.y1)/2);
+    const room=comps.find(r=>mx>r.rect[0]&&mx<r.rect[2]&&my>r.rect[1]&&my<r.rect[3]);
+    if(!room)return;
+    const dists={N:my-room.rect[1],S:room.rect[3]-my,W:mx-room.rect[0],E:room.rect[2]-mx};
+    const wl=Object.keys(dists).sort((a,b)=>dists[a]-dists[b])[0];
+    room.fixtures.push({item:KIND[k][0],kind:KIND[k][1],
+      rect:[+MX(c.x0).toFixed(2),+MY(c.y0).toFixed(2),+MX(c.x1).toFixed(2),+MY(c.y1).toFixed(2)],
+      h:KIND[k][1]==='fridge'?1.85:0.85,wall:wl});});
+  // 8. noms : équipements → taille → portes
+  comps.forEach(r=>{const has=k=>r.fixtures.some(fx=>fx.kind===k);
+    if(has('toilet')&&r.area<3.5&&!has('bathtub'))r.name='WC';
+    else if(has('bathtub'))r.name='BATHROOM';
+    else if(has('shower'))r.name='SHOWER ROOM';
+    else if(has('counter')||has('fridge'))r.name='KITCHEN';});
+  const hall=comps.filter(r=>!r.name).sort((a,b)=>b.doors.length-a.doors.length)[0];
+  if(hall&&hall.doors.length>=3)hall.name='HALL';
+  comps.filter(r=>!r.name&&r.area<2.2).forEach(r=>r.name='WC');
+  const un=comps.filter(r=>!r.name).sort((a,b)=>b.area-a.area);
+  if(un[0])un[0].name='LIVING ROOM';
+  un.slice(1).forEach((r,i)=>r.name='BEDROOM '+(i+1));
+  // 9. plan.json + tracé + bouton
+  const model={project:'Plan importé (détection navigateur)',units:'m',wall_height:2.5,
+    rooms:comps.map(r=>({name:r.name,area_m2:r.area,rect:r.rect.map(v=>+v.toFixed(2)),
+      doors:r.doors,windows:r.windows,furniture:r.fixtures}))};
+  if(entry)model.entry=entry;
+  g.strokeStyle='#d81b60';g.lineWidth=Math.max(2,im.width/700);g.setLineDash([8,5]);
+  comps.forEach(r=>{g.strokeRect(r.pxbox[0],r.pxbox[1],
+    r.pxbox[2]-r.pxbox[0],r.pxbox[3]-r.pxbox[1]);
+    g.fillStyle='#d81b60';g.fillText(r.name+' '+r.area+' m²',r.pxbox[0]+4,r.pxbox[1]+14/f*0+18);});
+  g.setLineDash([]);
+  const totW=((wx1-wx0)/f/pxm).toFixed(2);
+  st.innerHTML=st.textContent+
+    ` · ${comps.length} pièces · largeur estimée ${totW} m `+
+    `<a href="#" id="fixscale" style="color:#7fb3ff">corriger</a>`;
+  document.getElementById('fixscale').onclick=e=>{e.preventDefault();
+    const t=parseFloat(prompt('Largeur totale réelle du plan (m) ?',totW));
+    if(t>0)buildPlan(lastDets,lastIm,(wx1-wx0)/f/t);};
+  const b=document.getElementById('go3d');b.disabled=false;
+  b.onclick=()=>{localStorage.setItem('plancad_import',JSON.stringify(model));
+    location.href='cad.html?plan=import';};
 }
 </script>
 </body></html>

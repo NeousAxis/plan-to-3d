@@ -1003,7 +1003,11 @@ function tourShots(){
 init3d();
 const Q=new URLSearchParams(location.search);
 const PLAN=Q.get('plan')||'plans/apartment_2br.json';
-fetch(PLAN).then(r=>r.json()).then(m=>{
+const loadPlan=PLAN==='import'
+  ? Promise.resolve(JSON.parse(localStorage.getItem('plancad_import')||'null'))
+      .then(m=>{if(!m)throw new Error('aucun plan importé (repasser par detect.html)');return m;})
+  : fetch(PLAN).then(r=>r.json());
+loadPlan.then(m=>{
   setModel(m);
   if(Q.get('shot')==='tour'){setTimeout(tourShots,900);return;}
   const eye=Q.get('eye');
