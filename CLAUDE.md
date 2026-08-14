@@ -5,6 +5,23 @@
 > existants en « ARES-lite »** autour d'une source de vérité unique (`plan.json`).
 > Lis ⚡⚡⚡ (#4) puis les leçons de ⚡⚡ (#3) AVANT tout.
 
+## ⚡⚡⚡⚡⚡ SESSION 2026-08-14 #6 — Vectoriseur de murs VALIDÉ : la référence était fausse, pas l'algo
+
+Workflow multi-agents (2 implémentations concurrentes → vérif adversariale → durcissement) pour
+remplacer le remplissage approximatif par une vraie vectorisation. Résultat : `tools/plan_vector.py`
+(px, stdlib+PIL, déterministe, CLI `IMAGE --detections d.json --out o.json [--overlay] [--ref]`).
+**Découverte majeure : l'ancienne apartment_2br.json (ma main) contredisait les PIXELS du dessin** :
+encoche extérieure (porche) au sud sous douche/hall/WC (la réf collait ces pièces à la façade),
+porte bedroom1 en E (pas S), séjour = DOUBLE porte W (pas S), WC en-suite ouvrant depuis le
+changing, cuisine 2.97 m (pas 3.38). Preuves : /tmp/pvFinal/ref_projection.png vs overlay.png.
+→ **apartment_2br.json RÉGÉNÉRÉ depuis le vectoriseur** (convertisseur /tmp/convert_vec.py :
+px→m par calage murs, noms par recouvrement, soudure des bords <=0.45 + hull, mobilier reporté
+clampé, fenêtre N bed1 ré-ajoutée, porte douche N@0.7 ajoutée à la main, plan de travail cuisine
+redimensionné). cad.html : closeEdge ne construit PLUS de mur fantôme sur les portions du bbox
+sans pièce à moins de 0.75 m (porche ouvert). Le tour ?shot=tour confirme la topologie.
+**Prochaine étape actée : porter plan_vector en JS dans detect.html** (remplacer le flood-fill),
+et brancher plan_vector dans le skill (SKILL.md étape 1bis pour plans SANS cotes).
+
 ## ⚡⚡⚡⚡ SESSION 2026-08-11 #5 — « Le projet ne fonctionne pas » : crash Visiter réparé + rendu intérieur niveau rendu CAO
 
 L'user est arrivé fâché avec une image de référence (rendu CAO pro : couloir, panneaux bois,

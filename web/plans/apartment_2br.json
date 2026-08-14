@@ -1,115 +1,499 @@
 {
-  "project": "Apartment 2BR — plan user",
-  "units": "m",
-  "wall_height": 2.5,
-  "envelope": [14.26, 7.04],
-  "entry": { "edge": "S", "x": 6.9 },
-  "circulation": [
-    [3.01, 3.72, 7.76, 4.67],
-    [3.01, 4.67, 7.61, 5.82],
-    [5.21, 5.82, 7.61, 6.98],
-    [5.36, 2.38, 7.76, 3.72],
-    [7.76, 4.3, 10.88, 4.67],
-    [9.96, 4.67, 10.88, 4.95]
-  ],
-  "rooms": [
-    {
-      "name": "BEDROOM 1",
-      "area_m2": 19.72,
-      "rect": [0.0, 0.0, 5.36, 3.72],
-      "doors": [{ "wall": "S", "at": 0.78 }],
-      "windows": [{ "wall": "N", "at": 0.44 }, { "wall": "W", "at": 0.45 }],
-      "furniture": [
-        { "item": "lit double", "kind": "bed", "rect": [1.35, 0.06, 2.95, 2.16], "h": 0.55, "wall": "N" },
-        { "item": "chevet", "kind": "nightstand", "rect": [0.85, 0.06, 1.28, 0.5], "h": 0.5, "wall": "N" },
-        { "item": "chevet", "kind": "nightstand", "rect": [3.02, 0.06, 3.45, 0.5], "h": 0.5, "wall": "N" },
-        { "item": "commode", "kind": "wardrobe", "rect": [0.08, 3.26, 2.1, 3.66], "h": 1.2, "wall": "S" }
-      ]
-    },
-    {
-      "name": "BEDROOM 2",
-      "area_m2": 12.42,
-      "rect": [0.0, 3.72, 3.01, 7.04],
-      "doors": [{ "wall": "E", "at": 0.4 }],
-      "windows": [{ "wall": "W", "at": 0.55 }],
-      "furniture": [
-        { "item": "lit double", "kind": "bed", "rect": [0.08, 5.5, 1.98, 6.9], "h": 0.55, "wall": "W" },
-        { "item": "chevet", "kind": "nightstand", "rect": [0.08, 4.98, 0.5, 5.42], "h": 0.5, "wall": "W" },
-        { "item": "commode", "kind": "wardrobe", "rect": [0.08, 3.78, 2.1, 4.18], "h": 1.2, "wall": "N" }
-      ]
-    },
-    {
-      "name": "BATHROOM",
-      "area_m2": 5.71,
-      "rect": [5.36, 0.0, 7.76, 2.38],
-      "doors": [{ "wall": "S", "at": 0.3 }],
-      "windows": [],
-      "furniture": [
-        { "item": "baignoire", "kind": "bathtub", "rect": [7.14, 0.06, 7.7, 1.96], "h": 0.58, "wall": "E" },
-        { "item": "wc", "kind": "toilet", "rect": [5.5, 0.06, 5.95, 0.72], "h": 0.78, "wall": "N" },
-        { "item": "vasque", "kind": "vanity", "rect": [5.42, 1.0, 5.96, 1.9], "h": 0.85, "wall": "W" }
-      ]
-    },
-    {
-      "name": "SHOWER ROOM",
-      "area_m2": 2.55,
-      "rect": [3.01, 5.82, 5.21, 6.98],
-      "doors": [{ "wall": "N", "at": 0.72 }],
-      "windows": [],
-      "furniture": [
-        { "item": "douche", "kind": "shower", "rect": [3.11, 5.98, 4.06, 6.93], "h": 0.15, "wall": "S" },
-        { "item": "lave-mains", "kind": "vanity", "rect": [4.4, 6.4, 5.1, 6.9], "h": 0.85, "wall": "S" }
-      ]
-    },
-    {
-      "name": "CHANGING ROOM",
-      "area_m2": 5.57,
-      "rect": [7.61, 4.67, 9.96, 7.04],
-      "doors": [{ "wall": "N", "at": 0.53 }],
-      "windows": [],
-      "furniture": [
-        { "item": "penderie", "kind": "wardrobe", "rect": [7.7, 6.42, 9.5, 6.98], "h": 2.2, "wall": "S" },
-        { "item": "lave-mains", "kind": "vanity", "rect": [9.4, 5.45, 9.92, 5.98], "h": 0.85, "wall": "E" }
-      ]
-    },
-    {
-      "name": "WC",
-      "area_m2": 1.87,
-      "rect": [9.96, 4.95, 10.88, 6.98],
-      "doors": [{ "wall": "N", "at": 0.5 }],
-      "windows": [],
-      "furniture": [
-        { "item": "wc", "kind": "toilet", "rect": [10.2, 5.02, 10.64, 5.7], "h": 0.78, "wall": "N" }
-      ]
-    },
-    {
-      "name": "KITCHEN",
-      "area_m2": 8.17,
-      "rect": [10.88, 4.3, 14.26, 6.98],
-      "doors": [{ "wall": "W", "at": 0.12 }],
-      "windows": [{ "wall": "E", "at": 0.5 }],
-      "furniture": [
-        { "item": "plan de travail (plaque + évier)", "kind": "counter", "rect": [11.05, 6.36, 14.2, 6.94], "h": 0.9, "wall": "S" }
-      ]
-    },
-    {
-      "name": "LIVING ROOM",
-      "area_m2": 27.95,
-      "rect": [7.76, 0.0, 14.26, 4.3],
-      "doors": [{ "wall": "S", "at": 0.12 }],
-      "windows": [{ "wall": "N", "at": 0.51 }, { "wall": "N", "at": 0.87 }, { "wall": "E", "at": 0.5 }],
-      "furniture": [
-        { "item": "meuble TV", "kind": "tv", "rect": [8.85, 0.08, 10.75, 0.52], "h": 0.5, "wall": "N" },
-        { "item": "canapé", "kind": "sofa", "rect": [9.35, 2.35, 11.25, 3.2], "h": 0.75, "wall": "S" },
-        { "item": "table basse", "kind": "coffee", "rect": [9.72, 1.5, 10.72, 2.15], "h": 0.35 },
-        { "item": "fauteuil", "kind": "sofa", "rect": [8.15, 1.5, 8.95, 2.3], "h": 0.75, "wall": "W" },
-        { "item": "table à manger", "kind": "dining", "rect": [12.55, 1.0, 13.55, 2.9], "h": 0.75, "wall": "E" }
-      ]
-    },
-    {
-      "name": "HALL",
-      "area_m2": 8.76,
-      "label_at": [5.31, 5.25]
-    }
+ "project": "Apartment 2BR — plan user (vectorisé)",
+ "units": "m",
+ "wall_height": 2.5,
+ "envelope": [
+  14.26,
+  7.04
+ ],
+ "circulation": [
+  [
+   3.21,
+   3.7,
+   5.33,
+   4.76
   ]
+ ],
+ "rooms": [
+  {
+   "rect": [
+    7.73,
+    0.21,
+    14.02,
+    4.24
+   ],
+   "doors": [
+    {
+     "wall": "W",
+     "at": 0.89
+    },
+    {
+     "wall": "W",
+     "at": 0.73
+    }
+   ],
+   "windows": [
+    {
+     "wall": "E",
+     "at": 0.47
+    },
+    {
+     "wall": "N",
+     "at": 0.32
+    }
+   ],
+   "name": "LIVING ROOM",
+   "area_m2": 25.35,
+   "furniture": [
+    {
+     "item": "meuble TV",
+     "kind": "tv",
+     "rect": [
+      8.85,
+      0.26,
+      10.75,
+      0.7
+     ],
+     "h": 0.5,
+     "wall": "N"
+    },
+    {
+     "item": "canapé",
+     "kind": "sofa",
+     "rect": [
+      9.35,
+      2.35,
+      11.25,
+      3.2
+     ],
+     "h": 0.75,
+     "wall": "S"
+    },
+    {
+     "item": "table basse",
+     "kind": "coffee",
+     "rect": [
+      9.72,
+      1.5,
+      10.72,
+      2.15
+     ],
+     "h": 0.35
+    },
+    {
+     "item": "fauteuil",
+     "kind": "sofa",
+     "rect": [
+      8.15,
+      1.5,
+      8.95,
+      2.3
+     ],
+     "h": 0.75,
+     "wall": "W"
+    },
+    {
+     "item": "table à manger",
+     "kind": "dining",
+     "rect": [
+      12.55,
+      1.0,
+      13.55,
+      2.9
+     ],
+     "h": 0.75,
+     "wall": "E"
+    }
+   ]
+  },
+  {
+   "rect": [
+    0.21,
+    0.21,
+    5.33,
+    3.7
+   ],
+   "doors": [
+    {
+     "wall": "E",
+     "at": 0.88
+    }
+   ],
+   "windows": [
+    {
+     "wall": "W",
+     "at": 0.47
+    },
+    {
+     "wall": "N",
+     "at": 0.44
+    }
+   ],
+   "name": "BEDROOM 1",
+   "area_m2": 17.87,
+   "furniture": [
+    {
+     "item": "lit double",
+     "kind": "bed",
+     "rect": [
+      1.35,
+      0.26,
+      2.95,
+      2.36
+     ],
+     "h": 0.55,
+     "wall": "N"
+    },
+    {
+     "item": "chevet",
+     "kind": "nightstand",
+     "rect": [
+      0.85,
+      0.26,
+      1.28,
+      0.7
+     ],
+     "h": 0.5,
+     "wall": "N"
+    },
+    {
+     "item": "chevet",
+     "kind": "nightstand",
+     "rect": [
+      3.02,
+      0.26,
+      3.45,
+      0.7
+     ],
+     "h": 0.5,
+     "wall": "N"
+    },
+    {
+     "item": "commode",
+     "kind": "wardrobe",
+     "rect": [
+      0.26,
+      3.25,
+      2.28,
+      3.65
+     ],
+     "h": 1.2,
+     "wall": "S"
+    }
+   ]
+  },
+  {
+   "rect": [
+    0.21,
+    3.7,
+    3.21,
+    6.8
+   ],
+   "doors": [
+    {
+     "wall": "E",
+     "at": 0.2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "W",
+     "at": 0.49
+    }
+   ],
+   "name": "BEDROOM 2",
+   "area_m2": 9.3,
+   "furniture": [
+    {
+     "item": "lit double",
+     "kind": "bed",
+     "rect": [
+      0.26,
+      5.35,
+      2.16,
+      6.75
+     ],
+     "h": 0.55,
+     "wall": "W"
+    },
+    {
+     "item": "chevet",
+     "kind": "nightstand",
+     "rect": [
+      0.26,
+      4.98,
+      0.68,
+      5.42
+     ],
+     "h": 0.5,
+     "wall": "W"
+    },
+    {
+     "item": "commode",
+     "kind": "wardrobe",
+     "rect": [
+      0.26,
+      3.78,
+      2.28,
+      4.18
+     ],
+     "h": 1.2,
+     "wall": "N"
+    }
+   ]
+  },
+  {
+   "rect": [
+    5.33,
+    2.46,
+    7.73,
+    5.83
+   ],
+   "doors": [
+    {
+     "wall": "N",
+     "at": 0.49
+    },
+    {
+     "wall": "W",
+     "at": 0.23
+    },
+    {
+     "wall": "S",
+     "at": 0.73
+    },
+    {
+     "wall": "E",
+     "at": 0.65
+    },
+    {
+     "wall": "W",
+     "at": 0.51
+    },
+    {
+     "wall": "E",
+     "at": 0.37
+    },
+    {
+     "wall": "E",
+     "at": 0.18
+    }
+   ],
+   "windows": [],
+   "name": "HALL",
+   "area_m2": 8.09,
+   "furniture": []
+  },
+  {
+   "rect": [
+    11.05,
+    4.24,
+    14.02,
+    6.8
+   ],
+   "doors": [
+    {
+     "wall": "W",
+     "at": 0.19
+    }
+   ],
+   "windows": [
+    {
+     "wall": "E",
+     "at": 0.41
+    }
+   ],
+   "name": "KITCHEN",
+   "area_m2": 7.6,
+   "furniture": [
+    {
+     "item": "plan de travail (plaque + évier)",
+     "kind": "counter",
+     "rect": [11.15, 6.28, 13.95, 6.75],
+     "h": 0.9,
+     "wall": "S"
+    }
+   ]
+  },
+  {
+   "rect": [
+    5.33,
+    0.21,
+    7.73,
+    2.46
+   ],
+   "doors": [
+    {
+     "wall": "S",
+     "at": 0.5
+    }
+   ],
+   "windows": [],
+   "name": "BATHROOM",
+   "area_m2": 5.4,
+   "furniture": [
+    {
+     "item": "baignoire",
+     "kind": "bathtub",
+     "rect": [
+      7.12,
+      0.26,
+      7.68,
+      2.16
+     ],
+     "h": 0.58,
+     "wall": "E"
+    },
+    {
+     "item": "wc",
+     "kind": "toilet",
+     "rect": [
+      5.5,
+      0.26,
+      5.95,
+      0.92
+     ],
+     "h": 0.78,
+     "wall": "N"
+    },
+    {
+     "item": "vasque",
+     "kind": "vanity",
+     "rect": [
+      5.42,
+      1.0,
+      5.96,
+      1.9
+     ],
+     "h": 0.85,
+     "wall": "W"
+    }
+   ]
+  },
+  {
+   "rect": [
+    7.73,
+    4.24,
+    11.05,
+    5.83
+   ],
+   "doors": [
+    {
+     "wall": "S",
+     "at": 0.86
+    },
+    {
+     "wall": "W",
+     "at": 0.27
+    },
+    {
+     "wall": "E",
+     "at": 0.29
+    }
+   ],
+   "windows": [],
+   "name": "CHANGING ROOM",
+   "area_m2": 5.28,
+   "furniture": [
+    {
+     "item": "penderie",
+     "kind": "wardrobe",
+     "rect": [
+      7.78,
+      5.22,
+      9.58,
+      5.78
+     ],
+     "h": 2.2,
+     "wall": "S"
+    },
+    {
+     "item": "lave-mains",
+     "kind": "vanity",
+     "rect": [
+      9.4,
+      5.25,
+      9.92,
+      5.78
+     ],
+     "h": 0.85,
+     "wall": "E"
+    }
+   ]
+  },
+  {
+   "rect": [
+    3.21,
+    4.76,
+    5.33,
+    5.83
+   ],
+   "doors": [
+    {
+     "wall": "N",
+     "at": 0.7
+    }
+   ],
+   "windows": [],
+   "name": "SHOWER ROOM",
+   "area_m2": 2.27,
+   "furniture": [
+    {
+     "item": "douche",
+     "kind": "shower",
+     "rect": [
+      3.26,
+      4.83,
+      4.21,
+      5.78
+     ],
+     "h": 0.15,
+     "wall": "S"
+    },
+    {
+     "item": "lave-mains",
+     "kind": "vanity",
+     "rect": [
+      4.4,
+      5.28,
+      5.1,
+      5.78
+     ],
+     "h": 0.85,
+     "wall": "S"
+    }
+   ]
+  },
+  {
+   "rect": [
+    10.12,
+    5.83,
+    11.05,
+    6.8
+   ],
+   "doors": [
+    {
+     "wall": "N",
+     "at": 0.51
+    }
+   ],
+   "windows": [],
+   "name": "WC",
+   "area_m2": 0.9,
+   "furniture": [
+    {
+     "item": "wc",
+     "kind": "toilet",
+     "rect": [
+      10.2,
+      5.88,
+      10.64,
+      6.56
+     ],
+     "h": 0.78,
+     "wall": "N"
+    }
+   ]
+  }
+ ]
 }

@@ -784,6 +784,14 @@ function build3d(){
         const g0=Math.max(c0,gap[0]),g1=Math.min(c1,gap[1]);
         horiz?box(g0,pos,g1,pos,2.05,H,MAT.wall):box(pos,g0,pos,g1,2.05,H,MAT.wall);
         return;}
+      // façade en retrait (porche) : pas de mur fantôme sur la ligne du bbox
+      // si aucune pièce ne touche cette portion du périmètre
+      const nearRoom=MODEL.rooms.some(r=>{if(!r.rect)return false;const rc=r.rect;
+        if(horiz)return Math.abs((pos<(bb.y0+bb.y1)/2?rc[1]:rc[3])-pos)<0.75&&
+          Math.min(rc[2],c1)-Math.max(rc[0],c0)>0.1;
+        return Math.abs((pos<(bb.x0+bb.x1)/2?rc[0]:rc[2])-pos)<0.75&&
+          Math.min(rc[3],c1)-Math.max(rc[1],c0)>0.1;});
+      if(!nearRoom)return;
       horiz?box(c0,pos,c1,pos,0,H,MAT.wall):box(pos,c0,pos,c1,0,H,MAT.wall);};
     const covered=[];
     MODEL.rooms.forEach(r=>{if(!r.rect)return;const rc=r.rect;
