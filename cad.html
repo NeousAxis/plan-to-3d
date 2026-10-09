@@ -16,7 +16,8 @@
    padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.5;pointer-events:none;max-width:290px}
  main.v2d #pane3d{display:none} main.v3d #pane2d{display:none}
  .lbl3{color:#1a2230;font-size:11px;font-weight:700;text-shadow:0 1px 2px #fff;pointer-events:none;white-space:nowrap}
-</style></head>
+</style>
+<link rel="stylesheet" href="stage/stage.css"></head>
 <body>
 <header>
   <b>PlanCAD</b><span id="pname" style="font-size:12.5px;color:#aab6c9"></span>
@@ -34,6 +35,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+<!-- Stage : caméras de rendu, capture, rendu photo (architecture reprise d'ArtCraft) -->
+<script src="stage/router.js"></script>
+<script src="stage/tasks.js"></script>
+<script src="stage/stage.js"></script>
+<script src="stage/ui.js"></script>
 <script>
 'use strict';
 const $=q=>document.querySelector(q);
@@ -355,6 +362,7 @@ function draw2d(){
   dimChainH(hullCuts('x','max'),Y(bb.y1)+22,true);
   dimChainV(hullCuts('y','min'),X(bb.x0)-22,false);
   dimChainV(hullCuts('y','max'),X(bb.x1)+22,true);
+  if(window.Stage)Stage.draw2d();         // caméras de rendu (cône de champ)
 }
 cv.addEventListener('click',e=>{
   const b=cv.getBoundingClientRect();
@@ -594,11 +602,12 @@ function init3d(){
   resize3d();
   (function loop(){requestAnimationFrame(loop);
     const dt=Math.min(R3.clock.getDelta(),.1);
-    if(R3.fp)stepFP(dt);else R3.controls.update();
+    const stageCam=window.Stage&&Stage.drivesCamera();   // vue caméra du Stage
+    if(R3.fp)stepFP(dt);else if(stageCam)Stage.tick(dt);else R3.controls.update();
     if(R3.scene){
       updatePeople();
       R3.renderer.render(R3.scene,R3.camera);
-      if(!R3.fp)R3.lr.render(R3.scene,R3.camera);}})();
+      if(!R3.fp&&!stageCam)R3.lr.render(R3.scene,R3.camera);}})();
 }
 function resize3d(){const w=pane3.clientWidth||1,h=pane3.clientHeight||1;
   R3.renderer.setSize(w,h);R3.lr.setSize(w,h);
@@ -827,6 +836,7 @@ function build3d(){
     const p=makePerson();p.position.x=mX(x0+(x1-x0)*0.62);p.position.z=mZ(y0+(y1-y0)*0.58);
     sc.add(p);R3.people.push(p);}
   R3.scene=sc;
+  if(window.Stage)Stage.sceneBuilt();     // ré-ajoute les caméras de rendu à la nouvelle scène
 }
 function update3dSel(){
   MODEL.rooms.forEach((r,i)=>{const fl=R3.floors[i];if(!fl)return;
@@ -835,6 +845,7 @@ function update3dSel(){
 /* ── first-person walkthrough ── */
 function enterFP(){
   if(!MODEL||R3.fp)return;
+  if(window.Stage)Stage.exitView();
   R3.savedCam={pos:R3.camera.position.clone(),
                tgt:R3.controls.target.clone()};
   // spawn in the circulation (or first room)
@@ -897,7 +908,9 @@ function stepFP(dt){
   R3.camera.position.set(R3.eye.x,1.6,R3.eye.z);
   R3.camera.rotation.y=R3.yaw;R3.camera.rotation.x=R3.pitch;
 }
-addEventListener('keydown',e=>{R3.keys[e.code]=true;
+addEventListener('keydown',e=>{
+  if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||e.target.isContentEditable)return;  // saisie dans un champ
+  R3.keys[e.code]=true;
   if(e.code==='Escape')exitFP();
   if(e.code==='KeyP')shotPNG('base_view.png');});
 addEventListener('keyup',e=>{R3.keys[e.code]=false;});
@@ -920,6 +933,7 @@ function info(){
 }
 function refresh(){draw2d();update3dSel();info();}
 function setModel(m){MODEL=m;SEL=-1;$('#pname').textContent='— '+(m.project||'plan');
+  if(window.Stage)Stage.modelChanged();   // caméras de rendu lues dans plan.json
   layout2d();build3d();refresh();}
 
 /* views */
@@ -1007,8 +1021,9 @@ function tourShots(){
   setTimeout(step,900);
 }
 
-/* boot — ?plan=plans/xxx.json pour charger un autre plan */
+/* boot — ?plan=plans/xxx.json pour charger un autre plan ; ?stage=1 ouvre le Stage */
 init3d();
+if(window.Stage){Stage.init();StageUI.start();}
 const Q=new URLSearchParams(location.search);
 const PLAN=Q.get('plan')||'plans/apartment_2br.json';
 const loadPlan=PLAN==='import'
