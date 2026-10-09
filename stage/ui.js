@@ -142,7 +142,7 @@
     if (UI.ready && (!UI.promptDirty || UI.lastCamForPrompt !== S.sel)) recomposePrompt();
     updateCost();
   }
-  function selectedModel() { return Router.R.catalog.models.find(m => m.id === $('[data-r="model"]').value); }
+  function selectedModel() { const cat = Router.R.catalog; return cat && cat.models.find(m => m.id === $('[data-r="model"]').value); }
   function fillRenderControls(cat) {
     const ms = Router.models(m => m.capabilities.editImages || m.capabilities.textToImage);
     $('[data-r="model"]').innerHTML = ms.map(m => `<option value="${m.id}">${esc(m.label)}${m.capabilities.editImages ? '' : ' ⚠'}</option>`).join('');
@@ -161,7 +161,7 @@
     const sel = $('[data-r="provider"]'), prev = sel.value;
     const ps = Router.providersOf(m);
     sel.innerHTML = ps.map(p => `<option value="${p.id}" ${p.available ? '' : 'disabled'}>${esc(Router.providerLabel(p))}${p.available ? '' : ' (indisponible)'}</option>`).join('');
-    const pick = ps.find(p => p.id === prev && p.available) || ps.find(p => p.available) || ps[0];
+    const pick = (UI.providerChosen && ps.find(p => p.id === prev && p.available)) || ps.find(p => p.available) || ps[0];   // sinon le 1er du catalogue (Cloudflare si le pont répond)
     if (pick) sel.value = pick.id;
     updateCost();
   }
@@ -188,12 +188,14 @@
     UI.promptDirty = false;
     UI.lastCamForPrompt = Stage.S.sel;
   }
-  function refreshEngines() {
-    Router.probeBridge().then(() => {
-      const b = Router.R.bridge !== null;
-      $('.st-engines').innerHTML = (b ? '<span class="st-ok">● Pont local actif</span> : Cloudflare FLUX.2 disponible.'
-        : '<span class="st-off">● Pont local absent</span> : Cloudflare indisponible, rendu par Hugging Face depuis le navigateur. '
-          + 'Pour Cloudflare : <code>python3 tools/render_bridge.py</code> puis <code>http://127.0.0.1:8790/cad.html</code>.');
+  function refreshEngines(force) {
+    if (!UI.ready) return;                         // catalogue pas encore chargé : start() rappellera
+    Router.probeBridge(force).then(found => {
+      $('.st-engines').innerHTML = found ? '<span class="st-ok">● Pont local actif</span> : Cloudflare FLUX.2 disponible.'
+        : found === false ? '<span class="st-off">● Pont local absent</span> : Cloudflare indisponible, rendu par Hugging Face depuis le navigateur. '
+          + 'Pour Cloudflare : <code>python3 tools/render_bridge.py</code> puis <code>http://127.0.0.1:8790/cad.html</code>.'
+        : '<span class="st-ok">● Hugging Face</span> : rendu depuis le navigateur, rien à installer. '
+          + '<button class="st-link" data-act="bridge">Utiliser mon pont local (Cloudflare)</button>';
       fillProviders();
     });
   }
@@ -290,6 +292,7 @@
     const camId = camEl && camEl.dataset.cam, task = taskEl && Tasks.T.list.find(t => t.id === taskEl.dataset.task);
     switch (act) {
       case 'close': toggle(false); break;
+      case 'bridge': refreshEngines(true); break;
       case 'place': Stage.startPlacing(); if ($('#main').classList.contains('v3d')) $('#bsp').click(); break;
       case 'auto': {
         const r = (typeof SEL === 'number' && SEL >= 0) ? MODEL.rooms[SEL] : null;
@@ -327,7 +330,7 @@
       Stage.updateCam(S.sel, { [f]: (f === 'label' || f === 'aspect') ? v : +v });
     }
     if (r === 'model') fillProviders();
-    if (r === 'provider') updateCost();
+    if (r === 'provider') { UI.providerChosen = true; updateCost(); }
     if (r === 'style' && !UI.promptDirty) recomposePrompt();
     if (r === 'hftoken') Router.setHfToken(e.target.value);
   }
