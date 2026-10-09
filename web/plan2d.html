@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>Plan 2D — reconstruction</title>
+<style>html,body{margin:0;background:#fff;font-family:system-ui,sans-serif}
+canvas{display:block;margin:0 auto}</style></head>
+<body>
+<canvas id="c" width="980" height="560"></canvas>
+<script>
+// ── modèle de TON plan (mètres, origine haut-gauche, Y vers le bas) ──
+// murs: N=haut(y0) S=bas(y1) W=gauche(x0) E=droite(x1). door/win: {w:mur, at:0..1}
+const ROOMS=[
+ {n:"BEDROOM 1",   a:19.72, x0:0,     y0:0,    x1:5.36, y1:3.72, doors:[{w:'S',at:0.85}], wins:[{w:'W',at:0.5}]},
+ {n:"BATHROOM",    a:5.71,  x0:5.36,  y0:0,    x1:7.76, y1:2.38, doors:[{w:'S',at:0.5}],  wins:[]},
+ {n:"LIVING ROOM", a:27.95, x0:7.76,  y0:0,    x1:14.26,y1:4.30, doors:[{w:'S',at:0.12}], wins:[{w:'N',at:0.5},{w:'E',at:0.4}]},
+ {n:"BEDROOM 2",   a:12.42, x0:0,     y0:3.72, x1:3.74, y1:7.04, doors:[{w:'E',at:0.15}], wins:[{w:'W',at:0.5}]},
+ {n:"SHOWER ROOM", a:2.55,  x0:3.74,  y0:5.31, x1:5.21, y1:7.04, doors:[{w:'N',at:0.5}],  wins:[]},
+ {n:"CHANGING",    a:5.57,  x0:7.61,  y0:4.30, x1:9.96, y1:6.98, doors:[{w:'N',at:0.5}],  wins:[]},
+ {n:"WC",          a:2.47,  x0:9.96,  y0:4.30, x1:10.88,y1:6.98, doors:[{w:'N',at:0.5}],  wins:[]},
+ {n:"KITCHEN",     a:8.17,  x0:10.88, y0:4.30, x1:14.26,y1:6.98, doors:[{w:'N',at:0.35}], wins:[{w:'E',at:0.5}]},
+];
+const HALL={n:"HALL", a:8.76, at:[6.45,3.55]};
+const ENV={w:14.26,h:7.04};
+const DOORW=0.9, WINW=1.4;
+
+const cv=document.getElementById('c'), g=cv.getContext('2d');
+const S=58, OX=70, OY=52;                 // px/m + margins
+const X=x=>OX+x*S, Y=y=>OY+y*S;
+
+const COL={"BEDROOM 1":"#d3e6f7","BEDROOM 2":"#d3e6f7","BATHROOM":"#d0efe7",
+ "SHOWER ROOM":"#d0efe7","WC":"#e4e4e4","LIVING ROOM":"#f4e3c6","KITCHEN":"#f5d8c6",
+ "CHANGING":"#e9dfc4"};
+
+// floors + labels
+ROOMS.forEach(r=>{
+  g.fillStyle=COL[r.n]||"#eee";
+  g.fillRect(X(r.x0),Y(r.y0),(r.x1-r.x0)*S,(r.y1-r.y0)*S);
+});
+// walls
+g.lineCap="round";
+function edge(w,r){ // returns [ax,ay,bx,by] in metres for wall w of room r
+  if(w=='N')return[r.x0,r.y0,r.x1,r.y0];
+  if(w=='S')return[r.x0,r.y1,r.x1,r.y1];
+  if(w=='W')return[r.x0,r.y0,r.x0,r.y1];
+  return[r.x1,r.y0,r.x1,r.y1];
+}
+function drawWall(ax,ay,bx,by,ops){
+  const len=Math.hypot(bx-ax,by-ay), ux=(bx-ax)/len, uy=(by-ay)/len;
+  const gaps=(ops||[]).map(o=>{const gw=(o.kind=='win'?WINW:DOORW);
+    return {t0:(o.at*len-gw/2)/len,t1:(o.at*len+gw/2)/len,kind:o.kind,at:o.at,_cx:o._cx,_cy:o._cy};}).sort((p,q)=>p.t0-q.t0);
+  let cur=0; const solid=[];
+  gaps.forEach(gp=>{if(gp.t0>cur)solid.push([cur,gp.t0]);cur=Math.max(cur,gp.t1);});
+  if(cur<1)solid.push([cur,1]);
+  g.strokeStyle="#12233a"; g.lineWidth=6;
+  solid.forEach(([t0,t1])=>{g.beginPath();
+    g.moveTo(X(ax+ux*len*t0),Y(ay+uy*len*t0));
+    g.lineTo(X(ax+ux*len*t1),Y(ay+uy*len*t1));g.stroke();});
+  // windows: thin double line across gap
+  gaps.filter(gp=>gp.kind=='win').forEach(gp=>{
+    const a=[ax+ux*len*gp.t0,ay+uy*len*gp.t0], b=[ax+ux*len*gp.t1,ay+uy*len*gp.t1];
+    g.strokeStyle="#2a72c8"; g.lineWidth=2;
+    const nx=-uy,ny=ux;
+    [-2,2].forEach(off=>{g.beginPath();
+      g.moveTo(X(a[0])+nx*off,Y(a[1])+ny*off);g.lineTo(X(b[0])+nx*off,Y(b[1])+ny*off);g.stroke();});
+  });
+  // doors: swing arc (minor quarter arc) + leaf, opening INTO the room
+  gaps.filter(gp=>gp.kind=='door').forEach(gp=>{
+    const hx=ax+ux*len*gp.t0, hy=ay+uy*len*gp.t0;      // hinge at gap start
+    const ex=ax+ux*len*gp.t1, ey=ay+uy*len*gp.t1;      // other jamb
+    let nx=-uy, ny=ux;                                  // wall normal
+    // flip so the normal points toward the room centre (door opens inward)
+    if((gp._cx-hx)*nx+(gp._cy-hy)*ny < 0){nx=-nx; ny=-ny;}
+    g.strokeStyle="#8a5a2b"; g.lineWidth=2.5;
+    g.beginPath(); g.moveTo(X(hx),Y(hy)); g.lineTo(X(hx+nx*DOORW),Y(hy+ny*DOORW)); g.stroke();
+    const a0=Math.atan2(Y(hy+ny*DOORW)-Y(hy),X(hx+nx*DOORW)-X(hx));   // open dir
+    const a1=Math.atan2(Y(ey)-Y(hy),X(ex)-X(hx));                     // closed jamb dir
+    let d=a1-a0; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; // minor arc
+    g.beginPath();
+    for(let i=0;i<=12;i++){const a=a0+d*i/12;
+      const px=X(hx)+DOORW*S*Math.cos(a), py=Y(hy)+DOORW*S*Math.sin(a);
+      i?g.lineTo(px,py):g.moveTo(px,py);}
+    g.stroke();
+  });
+}
+// draw each room's walls; door normal must point inside → we flip per room centre
+function inwardOps(r,w){
+  const list=[];
+  (r.doors||[]).filter(d=>d.w==w).forEach(d=>list.push({kind:'door',at:d.at}));
+  (r.wins||[]).filter(d=>d.w==w).forEach(d=>list.push({kind:'win',at:d.at}));
+  return list;
+}
+ROOMS.forEach(r=>{
+  ['N','S','W','E'].forEach(w=>{const[ax,ay,bx,by]=edge(w,r);
+    drawWall(ax,ay,bx,by,inwardOps(r,w).map(o=>({...o, _cx:(r.x0+r.x1)/2,_cy:(r.y0+r.y1)/2})));});
+});
+// labels
+g.textAlign="center"; g.fillStyle="#12233a";
+ROOMS.forEach(r=>{const cx=(r.x0+r.x1)/2,cy=(r.y0+r.y1)/2;
+  g.font="bold 13px system-ui"; g.fillText(r.n,X(cx),Y(cy)-2);
+  g.font="11px system-ui"; g.fillText(r.a+" m²",X(cx),Y(cy)+13);});
+g.font="bold 13px system-ui"; g.fillText(HALL.n,X(HALL.at[0]),Y(HALL.at[1]));
+g.font="11px system-ui"; g.fillText(HALL.a+" m²",X(HALL.at[0]),Y(HALL.at[1])+13);
+
+// ── dimension chains (from the printed cotes) ──
+g.strokeStyle="#c0392b"; g.fillStyle="#c0392b"; g.lineWidth=1; g.font="11px system-ui";
+function hchain(y,cuts,labels){const py=Y(y);
+  cuts.forEach(c=>{g.beginPath();g.moveTo(X(c),py-4);g.lineTo(X(c),py+4);g.stroke();});
+  g.beginPath();g.moveTo(X(cuts[0]),py);g.lineTo(X(cuts[cuts.length-1]),py);g.stroke();
+  for(let i=0;i<labels.length;i++)g.fillText(labels[i],X((cuts[i]+cuts[i+1])/2),py-6);}
+function vchain(x,cuts,labels){const px=X(x);
+  cuts.forEach(c=>{g.beginPath();g.moveTo(px-4,Y(c));g.lineTo(px+4,Y(c));g.stroke();});
+  g.beginPath();g.moveTo(px,Y(cuts[0]));g.lineTo(px,Y(cuts[cuts.length-1]));g.stroke();
+  g.save();for(let i=0;i<labels.length;i++){g.fillText(labels[i],px-14,Y((cuts[i]+cuts[i+1])/2));}g.restore();}
+hchain(-0.35,[0,5.36,7.76,14.26],["5.36","2.40","6.50"]);
+hchain(7.45,[0,3.01,5.21,7.61,9.96,10.88,13.93],["3.01","2.20","2.40","2.35","0.92","3.05"]);
+vchain(-0.35,[0,3.72,7.04],["3.72","3.32"]);
+vchain(14.62,[0,4.30,6.98],["4.30","2.68"]);
+</script>
+</body></html>

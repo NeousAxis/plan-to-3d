@@ -1,0 +1,190 @@
+{
+  "_doc": "Catalogue des moteurs de rendu de PlanCAD Stage (architecture reprise d'ArtCraft : catalogue de modèles à capacités + routeur build → plan → estimate → send). Lu par web/stage/router.js (navigateur) ET render_router.py (Python). Règle projet : gratuit, sans carte, sans produit Google. Les textes de style reprennent vocabulary.json.",
+  "version": 1,
+  "sizes": {
+    "16:9": [1280, 720],
+    "3:2": [1536, 1024],
+    "4:3": [1024, 768],
+    "1:1": [1024, 1024],
+    "2:3": [1024, 1536],
+    "9:16": [720, 1280]
+  },
+  "focals": [14, 17, 20, 24, 28, 35, 50],
+  "sensorHeightMm": 24,
+  "defaults": {
+    "model": "flux-2-klein-4b",
+    "aspect": "16:9",
+    "focal": 17,
+    "focalSmallRoom": 14,
+    "smallRoomM2": 4.5,
+    "eye": 1.5,
+    "style": "contemporary_minimal",
+    "seed": 7
+  },
+  "budget": {
+    "cloudflareNeuronsPerDay": 10000,
+    "cloudflareNeuronsCap": 9000
+  },
+  "deny": {
+    "creators": ["Google"],
+    "reason": "Aucun produit Google sur ce projet (règle utilisateur)."
+  },
+  "models": [
+    {
+      "id": "flux-2-klein-4b",
+      "label": "FLUX.2 klein 4B",
+      "creator": "Black Forest Labs",
+      "blurb": "Rapide, garde bien la géométrie de la capture.",
+      "free": true,
+      "tags": ["edit", "fast"],
+      "capabilities": { "textToImage": true, "editImages": true, "maxRefs": 4 },
+      "progressMs": 12000,
+      "providers": [
+        {
+          "id": "cloudflare",
+          "runtime": "bridge",
+          "model": "@cf/black-forest-labs/flux-2-klein-4b",
+          "maxRefPx": 511,
+          "maxSide": 1920,
+          "cost": { "unit": "neurons", "inputTile": 5.37, "outputTile": 26.05 }
+        },
+        {
+          "id": "hf-space",
+          "runtime": "browser",
+          "space": "black-forest-labs/FLUX.2-klein-4B",
+          "endpoint": "/infer",
+          "api": "flux2-klein",
+          "maxRefPx": 1024,
+          "maxSide": 1024,
+          "cost": { "unit": "gpu-s", "estimate": 8 }
+        }
+      ]
+    },
+    {
+      "id": "flux-2-klein-9b",
+      "label": "FLUX.2 klein 9B",
+      "creator": "Black Forest Labs",
+      "blurb": "Plus détaillé que le 4B, quota plus court.",
+      "free": true,
+      "tags": ["edit"],
+      "capabilities": { "textToImage": true, "editImages": true, "maxRefs": 4 },
+      "progressMs": 20000,
+      "providers": [
+        {
+          "id": "cloudflare",
+          "runtime": "bridge",
+          "model": "@cf/black-forest-labs/flux-2-klein-9b",
+          "maxRefPx": 511,
+          "maxSide": 1920,
+          "cost": { "unit": "neurons", "firstMp": 1363.64, "extraMp": 181.82, "inputMp": 181.82 }
+        },
+        {
+          "id": "hf-space",
+          "runtime": "browser",
+          "space": "black-forest-labs/FLUX.2-klein-9B",
+          "endpoint": "/generate",
+          "api": "flux2-klein",
+          "maxRefPx": 1024,
+          "maxSide": 1024,
+          "cost": { "unit": "gpu-s", "estimate": 15 }
+        }
+      ]
+    },
+    {
+      "id": "flux-2-dev",
+      "label": "FLUX.2 dev",
+      "creator": "Black Forest Labs",
+      "blurb": "Meilleure qualité, lent : 1 ou 2 rendus gratuits par jour.",
+      "free": true,
+      "tags": ["edit", "quality"],
+      "capabilities": { "textToImage": true, "editImages": true, "maxRefs": 4 },
+      "progressMs": 60000,
+      "providers": [
+        {
+          "id": "cloudflare",
+          "runtime": "bridge",
+          "model": "@cf/black-forest-labs/flux-2-dev",
+          "maxRefPx": 511,
+          "maxSide": 1920,
+          "steps": 20,
+          "cost": { "unit": "neurons", "inputTilePerStep": 18.75, "outputTilePerStep": 37.5 }
+        }
+      ]
+    },
+    {
+      "id": "flux-1-kontext-dev",
+      "label": "FLUX.1 Kontext dev",
+      "creator": "Black Forest Labs",
+      "blurb": "Édition d'image à une référence.",
+      "free": true,
+      "tags": ["edit"],
+      "capabilities": { "textToImage": false, "editImages": true, "maxRefs": 1 },
+      "progressMs": 45000,
+      "providers": [
+        {
+          "id": "hf-space",
+          "runtime": "browser",
+          "space": "black-forest-labs/FLUX.1-Kontext-Dev",
+          "endpoint": "/infer",
+          "api": "kontext",
+          "maxRefPx": 1024,
+          "maxSide": 1024,
+          "cost": { "unit": "gpu-s", "estimate": 30 }
+        }
+      ]
+    },
+    {
+      "id": "qwen-image-edit",
+      "label": "Qwen-Image-Edit",
+      "creator": "Alibaba Qwen",
+      "blurb": "Très fidèle, mais quota Hugging Face court.",
+      "free": true,
+      "tags": ["edit", "quality"],
+      "capabilities": { "textToImage": false, "editImages": true, "maxRefs": 1 },
+      "progressMs": 90000,
+      "providers": [
+        {
+          "id": "hf-space",
+          "runtime": "browser",
+          "space": "Qwen/Qwen-Image-Edit",
+          "endpoint": "/infer",
+          "api": "qwen-edit",
+          "maxRefPx": 1024,
+          "maxSide": 1024,
+          "cost": { "unit": "gpu-s", "estimate": 60 }
+        }
+      ]
+    },
+    {
+      "id": "flux-1-schnell",
+      "label": "FLUX.1 schnell (texte seul)",
+      "creator": "Black Forest Labs",
+      "blurb": "Sans image de référence : ne suit PAS le plan.",
+      "free": true,
+      "tags": ["text"],
+      "capabilities": { "textToImage": true, "editImages": false, "maxRefs": 0 },
+      "progressMs": 8000,
+      "providers": [
+        {
+          "id": "cloudflare",
+          "runtime": "bridge",
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "maxRefPx": 0,
+          "maxSide": 2048,
+          "steps": 8,
+          "cost": { "unit": "neurons", "outputTile": 4.8, "perStep": 9.6 }
+        }
+      ]
+    }
+  ],
+  "styles": [
+    { "id": "contemporary_minimal", "label": "Contemporain épuré", "text": "contemporary minimalism, clean lines, monochromatic palette, ample negative space" },
+    { "id": "japandi", "label": "Japandi", "text": "japandi, scandinavian-japanese fusion, warm minimalism, soft palette" },
+    { "id": "scandi", "label": "Scandinave", "text": "scandinavian minimalism, light woods, calm white palette, hygge" },
+    { "id": "mid_century_modern", "label": "Mid-century", "text": "mid-century modern, walnut wood, brass accents, atomic-era curves" },
+    { "id": "mediterranean", "label": "Méditerranéen", "text": "mediterranean, plaster walls, terracotta tile, olive wood, arched openings" },
+    { "id": "industrial_loft", "label": "Loft industriel", "text": "industrial loft, exposed brick, black steel beams, oversized factory windows" },
+    { "id": "wabi_sabi", "label": "Wabi-sabi", "text": "wabi-sabi, imperfect beauty, raw materials, earthy patina" },
+    { "id": "luxe_modern", "label": "Luxe moderne", "text": "luxury modern, book-matched marble, brushed brass, mohair velvet, large-format porcelain" }
+  ]
+}

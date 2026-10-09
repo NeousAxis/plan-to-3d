@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>PlanCAD — détection portes/fenêtres (navigateur)</title>
+<style>
+ *{box-sizing:border-box} html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:#eef1f5}
+ header{height:46px;display:flex;align-items:center;gap:10px;padding:0 14px;background:#1c2433;color:#e8ecf4}
+ header b{font-size:15px} header .sep{flex:1}
+ header button,header label.btn{background:#2c3a52;color:#dfe6f2;border:0;border-radius:6px;
+   padding:6px 12px;font-size:12.5px;cursor:pointer}
+ #st{font-size:12px;color:#93a1b8}
+ main{position:absolute;top:46px;bottom:0;left:0;right:0;overflow:auto;padding:14px}
+ #wrap{position:relative;display:inline-block;background:#fff;box-shadow:0 4px 18px rgba(20,30,50,.15)}
+ canvas{display:block;max-width:100%}
+ #legend{margin:8px 2px;font-size:12.5px;color:#39445a}
+ .sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin:0 4px 0 12px;vertical-align:-1px}
+</style></head>
+<body>
+<header>
+  <b>PlanCAD</b><span style="font-size:12.5px;color:#aab6c9">— détection dans le navigateur (rien à installer)</span>
+  <span class="sep"></span>
+  <label class="btn">Charger un plan…<input id="f" type="file" accept="image/*" hidden></label>
+  <button id="dl" disabled>Télécharger le JSON</button>
+  <button id="go3d" disabled style="background:#2f7d4f">🏠 Ébauche 3D + visite (approximatif)</button>
+  <span id="st">chargement du modèle (13 Mo, une seule fois)…</span>
+</header>
+<main>
+  <div style="margin:8px 2px;font-size:12.5px;color:#a33">
+    ⚠ La reconstruction 3D automatique est une ÉBAUCHE : géométrie approximative,
+    noms parfois faux. Pour un plan exact au centimètre : le skill plan-to-3d
+    (lecture des cotes + audit) produit le plan.json fidèle, à glisser dans cad.html.
+  </div>
+  <div id="legend">
+    <span class="sw" style="background:#0aa84f"></span>portes
+    <span class="sw" style="background:#1e5ae6"></span>fenêtres / vitrages
+    <span class="sw" style="background:#f08c00"></span>équipements fixes (WC, baignoire, évier…)
+  </div>
+  <div id="wrap"><canvas id="cv" width="900" height="500"></canvas></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+'use strict';
+const MODEL='https://huggingface.co/NeousAxis/plan-openings-onnx/resolve/main/best.onnx';
+const LABELS='https://huggingface.co/NeousAxis/plan-openings-onnx/resolve/main/labels.json';
+const S=1024, CONF=0.25, IOU=0.45;
+ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/';
+const cv=document.getElementById('cv'), g=cv.getContext('2d');
+const st=document.getElementById('st');
+let sess=null,names=null,lastJSON=null,img=null;
+
+async function boot(){
+  try{
+    const[s,l]=await Promise.all([
+      ort.InferenceSession.create(MODEL,{executionProviders:['wasm']}),
+      fetch(LABELS).then(r=>r.json())]);
+    sess=s;names=l;
+    st.textContent='modèle prêt — charge un plan (PNG/JPG)';
+    const q=new URLSearchParams(location.search).get('img');
+    if(q){const im=new Image();im.crossOrigin='anonymous';
+      im.onload=()=>run(im);im.src=q;}
+  }catch(e){st.textContent='✗ modèle inaccessible : '+e.message;}
+}
+boot();
+
+document.getElementById('f').addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file)return;
+  const im=new Image();
+  im.onload=()=>{URL.revokeObjectURL(im.src);run(im);};
+  im.src=URL.createObjectURL(file);
+});
+
+function kindOf(c){
+  c=c.toLowerCase();
+  if(c.includes('door'))return'door';
+  if(c.includes('window')||c==='glass')return'window';
+  if(c.startsWith('fixedfurniture')||c==='tub')return'fixture';
+  if(c==='wall'||c==='wall external')return'wall';
+  return null;                       // murs, espaces, labels… non affichés
+}
+const COL={door:'#0aa84f',window:'#1e5ae6',fixture:'#f08c00'};
+
+async function run(im){
+  img=im;
+  st.textContent='détection en cours…';
+  const ocrP=ocrInfo(im);
+  await new Promise(r=>setTimeout(r,30));   // laisse peindre le statut
+  // letterbox 1024×1024, image collée en (0,0)
+  const sc=S/Math.max(im.width,im.height);
+  const nw=Math.round(im.width*sc), nh=Math.round(im.height*sc);
+  const c2=document.createElement('canvas');c2.width=c2.height=S;
+  const G=c2.getContext('2d');
+  G.fillStyle='#727272';G.fillRect(0,0,S,S);
+  G.drawImage(im,0,0,nw,nh);
+  const d=G.getImageData(0,0,S,S).data;
+  const x=new Float32Array(3*S*S);
+  for(let i=0;i<S*S;i++){
+    x[i]=d[i*4]/255; x[S*S+i]=d[i*4+1]/255; x[2*S*S+i]=d[i*4+2]/255;}
+  const out=await sess.run({[sess.inputNames[0]]:new ort.Tensor('float32',x,[1,3,S,S])});
+  const y=out[sess.outputNames[0]];           // [1, 4+nc, 21504]
+  const[,C,N]=y.dims, nc=C-4, v=y.data;
+  const cand=[];
+  for(let i=0;i<N;i++){
+    let best=0,bc=-1;
+    for(let k=0;k<nc;k++){const s0=v[(4+k)*N+i];if(s0>best){best=s0;bc=k;}}
+    if(best<CONF)continue;
+    const kind=kindOf(names[bc]||'');
+    if(!kind)continue;
+    const cx=v[i],cy=v[N+i],w=v[2*N+i],h=v[3*N+i];
+    cand.push({kind,cls:names[bc],conf:best,
+      x0:(cx-w/2)/sc,y0:(cy-h/2)/sc,x1:(cx+w/2)/sc,y1:(cy+h/2)/sc});
+  }
+  // NMS par type
+  cand.sort((a,b)=>b.conf-a.conf);
+  const keep=[];
+  for(const c of cand){
+    let ok=true;
+    for(const k of keep){
+      if(k.kind!==c.kind)continue;
+      const ix=Math.max(0,Math.min(c.x1,k.x1)-Math.max(c.x0,k.x0));
+      const iy=Math.max(0,Math.min(c.y1,k.y1)-Math.max(c.y0,k.y0));
+      const inter=ix*iy, a=(c.x1-c.x0)*(c.y1-c.y0), b=(k.x1-k.x0)*(k.y1-k.y0);
+      if(inter/(a+b-inter)>IOU){ok=false;break;}
+    }
+    if(ok)keep.push(c);
+  }
+  // rendu
+  cv.width=im.width;cv.height=im.height;
+  g.drawImage(im,0,0);
+  g.lineWidth=Math.max(2,im.width/500);g.font=(im.width/85|0)+'px system-ui';
+  keep.filter(c=>c.kind!=='wall').forEach(c=>{g.strokeStyle=g.fillStyle=COL[c.kind];
+    g.strokeRect(c.x0,c.y0,c.x1-c.x0,c.y1-c.y0);
+    g.fillText(c.cls.replace(/^fixedfurniture /,''),c.x0+2,c.y0-3);});
+  const counts={};keep.filter(c=>c.kind!=='wall').forEach(c=>counts[c.kind]=(counts[c.kind]||0)+1);
+  st.textContent=`✓ ${counts.door||0} portes · ${counts.window||0} fenêtres · ${counts.fixture||0} équipements`;
+  lastJSON={image:{width:im.width,height:im.height},detections:keep.filter(c=>c.kind!=='wall').map(c=>({
+    kind:c.kind,class:c.cls,conf:+c.conf.toFixed(3),
+    bbox:[+c.x0.toFixed(1),+c.y0.toFixed(1),+c.x1.toFixed(1),+c.y1.toFixed(1)]}))};
+  const dl=document.getElementById('dl');dl.disabled=false;
+  dl.onclick=()=>{const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(lastJSON,null,1)],{type:'application/json'}));
+    a.download='detections.json';a.click();};
+  lastWords=await ocrP;
+  _snap=null;
+  buildPlan(keep,im);
+}
+
+/* ─── reconstruction : image + détections → plan.json → PlanCAD ───
+   pièces = zones closes entre les murs (les ouvertures détectées ferment
+   les trous), échelle = largeur standard des portes (~0,95 m). */
+let lastDets=null,lastIm=null,lastWords=null,_snap=null;
+
+/* OCR des textes du plan (tesseract.js, dans le navigateur) :
+   les surfaces imprimées calent l'ÉCHELLE, les libellés donnent les NOMS. */
+async function ocrInfo(im){
+  try{
+    const k=Math.min(2,2400/im.width);          // ×2 : le petit texte des plans
+    const c=document.createElement('canvas');
+    c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+    const w=await Tesseract.createWorker('eng');
+    const{data}=await w.recognize(c);
+    await w.terminate();
+    return (data.words||[]).map(o=>({t:o.text,x:(o.bbox.x0+o.bbox.x1)/2/k,
+                                     y:(o.bbox.y0+o.bbox.y1)/2/k}));
+  }catch(e){console.warn('OCR indisponible:',e);return[];}
+}
+
+function buildPlan(dets,im,forcedPxm){
+  lastDets=dets;lastIm=im;
+  if(!_snap)_snap=g.getImageData(0,0,cv.width,cv.height);
+  else g.putImageData(_snap,0,0);
+  const words=lastWords||[];
+  // 1. masque murs (bleu nuit OU sombre)
+  const MW=Math.min(1100,im.width), f=MW/im.width, MH=Math.round(im.height*f);
+  const c2=document.createElement('canvas');c2.width=MW;c2.height=MH;
+  const G=c2.getContext('2d');G.drawImage(im,0,0,MW,MH);
+  const d=G.getImageData(0,0,MW,MH).data;
+  const wall=new Uint8Array(MW*MH);
+  let wx0=1e9,wy0=1e9,wx1=-1,wy1=-1;
+  for(let i=0;i<MW*MH;i++){
+    const r=d[i*4],g0=d[i*4+1],b=d[i*4+2];
+    const navy=r<110&&g0<110&&b-r>=25, dark=r<95&&g0<95&&b<125;
+    if(navy||dark)wall[i]=1;
+    if(navy){const x=i%MW,y=(i/MW)|0;
+      if(x<wx0)wx0=x;if(x>wx1)wx1=x;if(y<wy0)wy0=y;if(y>wy1)wy1=y;}}
+  if(wx1<0){st.textContent+=' · reconstruction impossible (murs introuvables)';return;}
+  {const w2=new Uint8Array(wall);          // dilatation anti-fuites
+   for(let y=1;y<MH-1;y++)for(let x=1;x<MW-1;x++){const i=y*MW+x;
+     if(w2[i]||w2[i-1]||w2[i+1]||w2[i-MW]||w2[i+MW])wall[i]=1;}}
+  dets.filter(c=>c.kind==='wall').forEach(c=>{      // murs détectés (renfort)
+    const w=c.x1-c.x0,h=c.y1-c.y0;
+    if(Math.min(w,h)>0.3*Math.max(w,h))return;        // blobs douteux ignorés
+    const x0=Math.max(0,(c.x0*f)|0),x1=Math.min(MW-1,(c.x1*f)|0);
+    const y0=Math.max(0,(c.y0*f)|0),y1=Math.min(MH-1,(c.y1*f)|0);
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)wall[y*MW+x]=1;});
+  dets.filter(c=>c.kind==='door'||c.kind==='window').forEach(c=>{   // sceller les ouvertures
+    const x0=Math.max(0,(c.x0*f-5)|0),x1=Math.min(MW-1,(c.x1*f+5)|0);
+    const y0=Math.max(0,(c.y0*f-5)|0),y1=Math.min(MH-1,(c.y1*f+5)|0);
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)wall[y*MW+x]=1;});
+  // 2. extérieur + composantes intérieures (EN PIXELS d'abord)
+  const lab=new Int32Array(MW*MH);
+  const q=[];
+  for(let x=0;x<MW;x++){q.push(x,(MH-1)*MW+x);}
+  for(let y=0;y<MH;y++){q.push(y*MW,y*MW+MW-1);}
+  while(q.length){const i=q.pop();
+    if(lab[i]||wall[i])continue;lab[i]=-1;
+    const x=i%MW,y=(i/MW)|0;
+    if(x>0)q.push(i-1);if(x<MW-1)q.push(i+1);
+    if(y>0)q.push(i-MW);if(y<MH-1)q.push(i+MW);}
+  const comps=[];let id=0,maxId=0;
+  for(let s=0;s<MW*MH;s++){
+    if(lab[s]||wall[s])continue;
+    id++;const st2=[s];lab[s]=id;
+    let n=0,bx0=1e9,by0=1e9,bx1=-1,by1=-1;
+    while(st2.length){const i=st2.pop();n++;
+      const x=i%MW,y=(i/MW)|0;
+      if(x<bx0)bx0=x;if(x>bx1)bx1=x;if(y<by0)by0=y;if(y>by1)by1=y;
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{
+        const nx=x+dx,ny=y+dy;
+        if(nx<0||ny<0||nx>=MW||ny>=MH)return;
+        const j=ny*MW+nx;
+        if(!lab[j]&&!wall[j]){lab[j]=id;st2.push(j);}});}
+    comps.push({id,npix:n,pxbox:[bx0/f,by0/f,bx1/f,by1/f]});maxId=id;}
+  // anti-fusion : une composante qui contient DEUX libellés de pièces
+  // différents est coupée sur la ligne de mur quasi continue entre eux
+  const BIG=/(LIVING|KITCHEN|BEDROOM|CHAMBRE|SEJOUR|SÉJOUR|SALON|CUISINE|DINING|OFFICE|BUREAU|BATH|SHOWER|CHANGING|DRESSING)/i;
+  const bigWords=words.filter(w=>BIG.test(w.t));
+  for(let pass=0;pass<3;pass++){
+    let done=true;
+    for(const c of comps){
+      const inside=bigWords.filter(w=>w.x>c.pxbox[0]&&w.x<c.pxbox[2]&&
+                                      w.y>c.pxbox[1]&&w.y<c.pxbox[3]);
+      const kindOfW=w=>(w.t.match(BIG)||[])[1]?.toUpperCase();
+      if(new Set(inside.map(kindOfW)).size<2)continue;
+      let A=null,Bw=null,dm=-1;
+      for(const q1 of inside)for(const q2 of inside){
+        if(kindOfW(q1)===kindOfW(q2))continue;
+        const dd=(q1.x-q2.x)**2+(q1.y-q2.y)**2;
+        if(dd>dm){dm=dd;A=q1;Bw=q2;}}
+      if(!A)continue;
+      const vert=Math.abs(A.x-Bw.x)>=Math.abs(A.y-Bw.y);
+      const b0=[c.pxbox[0]*f|0,c.pxbox[1]*f|0,c.pxbox[2]*f|0,c.pxbox[3]*f|0];
+      let best=null;
+      const lo=(vert?Math.min(A.x,Bw.x):Math.min(A.y,Bw.y))*f+8;
+      const hi=(vert?Math.max(A.x,Bw.x):Math.max(A.y,Bw.y))*f-8;
+      for(let pos=lo|0;pos<=hi;pos+=2){
+        let open=0;
+        if(vert){for(let y=b0[1];y<=b0[3];y++)if(lab[y*MW+pos]===c.id)open++;}
+        else{for(let x=b0[0];x<=b0[2];x++)if(lab[pos*MW+x]===c.id)open++;}
+        if(best===null||open<best.open)best={open,pos};}
+      const span=vert?(b0[3]-b0[1]):(b0[2]-b0[0]);
+      if(!best||best.open>Math.max(6,span*0.18))continue;
+      const nid=++maxId;
+      let n1=0,d0=1e9,d1=1e9,d2=-1,d3=-1,n2=0,e0=1e9,e1=1e9,e2=-1,e3=-1;
+      for(let y=b0[1];y<=b0[3];y++)for(let x=b0[0];x<=b0[2];x++){
+        const i=y*MW+x;if(lab[i]!==c.id)continue;
+        if(vert?(x>best.pos):(y>best.pos)){lab[i]=nid;n2++;
+          e0=Math.min(e0,x);e1=Math.min(e1,y);e2=Math.max(e2,x);e3=Math.max(e3,y);}
+        else{n1++;d0=Math.min(d0,x);d1=Math.min(d1,y);d2=Math.max(d2,x);d3=Math.max(d3,y);}}
+      if(n1<50||n2<50)continue;
+      c.npix=n1;c.pxbox=[d0/f,d1/f,d2/f,d3/f];
+      comps.push({id:nid,npix:n2,pxbox:[e0/f,e1/f,e2/f,e3/f]});
+      done=false;break;}
+    if(done)break;}
+  if(!comps.length){st.textContent+=' · reconstruction impossible (aucune pièce close)';return;}
+  // 3. ÉCHELLE : m² imprimés (OCR) > portes > correction manuelle
+  const areaLabels=[];      // {x,y,val} en px image
+  const fixDec=(t,v)=>(!t.includes('.')&&v>=100)?v/100:v;   // « 571 » = 5.71 (point perdu)
+  for(let i=0;i<words.length;i++){
+    const t=words[i].t.replace(',','.');
+    let m=t.match(/^(\d{1,4}(?:\.\d{1,2})?)m/);
+    if(m){areaLabels.push({x:words[i].x,y:words[i].y,val:fixDec(m[1],+m[1])});continue;}
+    if(/^\d{1,4}(\.\d{1,2})?$/.test(t)&&words[i+1]&&/m/i.test(words[i+1].t)
+       &&Math.abs(words[i+1].y-words[i].y)<14)
+      areaLabels.push({x:words[i].x,y:words[i].y,val:fixDec(t,+t)});}
+  let pxm=forcedPxm,src='corrigée';
+  if(!pxm){
+    const est=[];
+    comps.forEach(r=>{
+      const inside=areaLabels.filter(a=>a.x>r.pxbox[0]&&a.x<r.pxbox[2]&&
+                                        a.y>r.pxbox[1]&&a.y<r.pxbox[3]&&a.val>=1.5);
+      if(inside.length===1){
+        const E=2.5/f;
+        const bA=(r.pxbox[2]-r.pxbox[0]+2*E)*(r.pxbox[3]-r.pxbox[1]+2*E);
+        est.push(Math.sqrt(bA/inside[0].val));}});
+    est.sort((a,b)=>a-b);
+    window._dbg={est:est.slice(),areaLabels};
+    // robustesse : médiane puis rejet des estimations à ±25 % de la médiane
+    if(est.length>=2){
+      const med=est[est.length>>1];
+      const ok=est.filter(v=>Math.abs(v-med)/med<0.25);
+      if(ok.length>=2){pxm=ok.reduce((s,v)=>s+v,0)/ok.length;src='m² imprimés';}}
+  }
+  if(!pxm){
+    const dws=dets.filter(c=>c.kind==='door').map(c=>((c.x1-c.x0)+(c.y1-c.y0))/2).sort((a,b)=>a-b);
+    if(dws.length>=2){pxm=dws[Math.floor(dws.length*0.8)]/0.95;src='largeur portes';}
+    else{const t=parseFloat(prompt('Largeur totale du plan en mètres ?','12'));
+         pxm=(wx1-wx0)/f/(t||12);src='largeur totale';}}
+  const MX=x=>(x-wx0/f)/pxm, MY=y=>(y-wy0/f)/pxm;
+  // 4. rects en mètres + filtres
+  const EPX=2.5/f;                        // compense l'érosion du masque
+  let rooms=comps.map(r=>({npix:r.npix,pxbox:r.pxbox,
+    rect:[MX(r.pxbox[0]-EPX),MY(r.pxbox[1]-EPX),MX(r.pxbox[2]+EPX),MY(r.pxbox[3]+EPX)],
+    doors:[],windows:[],fixtures:[]}))
+    .filter(r=>{const w=r.rect[2]-r.rect[0],h=r.rect[3]-r.rect[1];
+      const a=w*h;
+      r.area=+a.toFixed(1);
+      return a>=0.8&&Math.min(w,h)>=0.55&&a<=130;});
+  if(!rooms.length){st.textContent+=' · reconstruction impossible';return;}
+  // 5. SOUDURE des murs partagés : les bords proches fusionnent sur un axe commun
+  ['x','y'].forEach(ax=>{
+    const idx=ax==='x'?[0,2]:[1,3];
+    const vals=[];rooms.forEach(r=>idx.forEach(k=>vals.push(r.rect[k])));
+    vals.sort((a,b)=>a-b);
+    const groups=[];let cur=[vals[0]];
+    for(let i=1;i<vals.length;i++){
+      if(vals[i]-cur[cur.length-1]<=0.45)cur.push(vals[i]);
+      else{groups.push(cur);cur=[vals[i]];}}
+    groups.push(cur);
+    const snapv=v=>{for(const gp of groups)
+      if(v>=gp[0]-1e-6&&v<=gp[gp.length-1]+1e-6)
+        return gp.reduce((s,x)=>s+x,0)/gp.length;return v;};
+    rooms.forEach(r=>idx.forEach(k=>r.rect[k]=+snapv(r.rect[k]).toFixed(2)));});
+  rooms=rooms.filter(r=>r.rect[2]-r.rect[0]>=0.5&&r.rect[3]-r.rect[1]>=0.5);
+  // soudure par paires de bords en vis-à-vis (gap = mur + érosion),
+  // sauf si une troisième pièce occupe l'entre-deux (couloir réel)
+  const occupied=(x0,y0,x1,y1,a,b)=>rooms.some(r=>r!==a&&r!==b&&
+    Math.min(r.rect[2],x1)-Math.max(r.rect[0],x0)>0.05&&
+    Math.min(r.rect[3],y1)-Math.max(r.rect[1],y0)>0.05);
+  for(let pass=0;pass<2;pass++)
+    for(const a of rooms)for(const b of rooms){
+      if(a===b)continue;
+      const ovY=Math.min(a.rect[3],b.rect[3])-Math.max(a.rect[1],b.rect[1]);
+      if(ovY>0.5){const gap=b.rect[0]-a.rect[2];
+        if(gap>0.01&&gap<1.0&&!occupied(a.rect[2],Math.max(a.rect[1],b.rect[1]),
+            b.rect[0],Math.min(a.rect[3],b.rect[3]),a,b)){
+          const m=+((a.rect[2]+b.rect[0])/2).toFixed(2);a.rect[2]=m;b.rect[0]=m;}}
+      const ovX=Math.min(a.rect[2],b.rect[2])-Math.max(a.rect[0],b.rect[0]);
+      if(ovX>0.5){const gap=b.rect[1]-a.rect[3];
+        if(gap>0.01&&gap<1.0&&!occupied(Math.max(a.rect[0],b.rect[0]),a.rect[3],
+            Math.min(a.rect[2],b.rect[2]),b.rect[1],a,b)){
+          const m=+((a.rect[3]+b.rect[1])/2).toFixed(2);a.rect[3]=m;b.rect[1]=m;}}}
+  rooms.forEach(r=>{r.area=+((r.rect[2]-r.rect[0])*(r.rect[3]-r.rect[1])).toFixed(1);});
+  // 6. ouvertures → murs (recopiées des 2 côtés d'un mur partagé)
+  const hull=[Math.min(...rooms.map(r=>r.rect[0])),Math.min(...rooms.map(r=>r.rect[1])),
+              Math.max(...rooms.map(r=>r.rect[2])),Math.max(...rooms.map(r=>r.rect[3]))];
+  let entry=null;
+  const edgeOf=(rc,wl)=>({N:[rc[0],rc[1],rc[2],rc[1]],S:[rc[0],rc[3],rc[2],rc[3]],
+                          W:[rc[0],rc[1],rc[0],rc[3]],E:[rc[2],rc[1],rc[2],rc[3]]}[wl]);
+  dets.filter(c=>c.kind!=='fixture').forEach(c=>{
+    const mx=MX((c.x0+c.x1)/2),my=MY((c.y0+c.y1)/2);
+    const hits=[];
+    rooms.forEach(r=>{['N','S','W','E'].forEach(wl=>{
+      const[ax,ay,bx,by]=edgeOf(r.rect,wl);
+      let dist,t;
+      if(ay===by){t=(mx-Math.min(ax,bx))/Math.abs(bx-ax);dist=Math.abs(my-ay);}
+      else{t=(my-Math.min(ay,by))/Math.abs(by-ay);dist=Math.abs(mx-ax);}
+      if(t>-0.02&&t<1.02&&dist<0.7)hits.push({r,wl,t:Math.min(Math.max(t,0.03),0.97),dist});});});
+    hits.sort((a,b)=>a.dist-b.dist);
+    if(!hits.length)return;
+    const key=c.kind==='door'?'doors':'windows';
+    const seen=new Set();
+    hits.slice(0,2).forEach(h=>{
+      if(seen.has(h.r))return;seen.add(h.r);
+      h.r[key].push({wall:h.wl,at:+h.t.toFixed(2)});});
+    if(c.kind==='door'&&hits.length===1){
+      const dh=[my-hull[1],hull[3]-my,mx-hull[0],hull[2]-mx];
+      const k=dh.indexOf(Math.min(...dh));
+      if(dh[k]<0.6)entry=k<2?{edge:'NS'[k],x:+mx.toFixed(2)}:{edge:'WE'[k-2],y:+my.toFixed(2)};}
+  });
+  // 7. équipements fixes → mobilier
+  const KIND={toilet:['wc','toilet'],bathtub:['baignoire','bathtub'],tub:['baignoire','bathtub'],
+    sink:['vasque','vanity'],shower:['douche','shower'],countertop:['plan de travail','counter'],
+    basecabinet:['plan de travail','counter'],refrigerator:['réfrigérateur','fridge'],
+    closet:['penderie','wardrobe'],washingmachine:['lave-linge','generic']};
+  dets.filter(c=>c.kind==='fixture').forEach(c=>{
+    const cls=c.cls.toLowerCase();
+    const k=Object.keys(KIND).find(k=>cls.includes(k));if(!k)return;
+    const mx=MX((c.x0+c.x1)/2),my=MY((c.y0+c.y1)/2);
+    const room=rooms.find(r=>mx>r.rect[0]&&mx<r.rect[2]&&my>r.rect[1]&&my<r.rect[3]);
+    if(!room)return;
+    const dists={N:my-room.rect[1],S:room.rect[3]-my,W:mx-room.rect[0],E:room.rect[2]-mx};
+    const wl=Object.keys(dists).sort((a,b)=>dists[a]-dists[b])[0];
+    room.fixtures.push({item:KIND[k][0],kind:KIND[k][1],
+      rect:[+MX(c.x0).toFixed(2),+MY(c.y0).toFixed(2),+MX(c.x1).toFixed(2),+MY(c.y1).toFixed(2)],
+      h:KIND[k][1]==='fridge'?1.85:0.85,wall:wl});});
+  // 8. NOMS : d'abord les libellés lus sur le plan (OCR), puis heuristiques
+  const LEX=[[/(LIVING|SEJOUR|SÉJOUR|SALON)/i,'LIVING ROOM'],[/BEDROOM|CHAMBRE/i,'BEDROOM'],
+    [/KITCHEN|CUISINE/i,'KITCHEN'],[/BATH|S\.?D\.?B|BAIN/i,'BATHROOM'],
+    [/SHOWER|DOUCHE/i,'SHOWER ROOM'],[/^W\.?C\.?$/i,'WC'],[/HALL|ENTR|COULOIR|DGT/i,'HALL'],
+    [/CHANGING|DRESSING/i,'CHANGING ROOM'],[/CELLIER|STORAGE/i,'CELLIER'],
+    [/OFFICE|BUREAU/i,'BUREAU'],[/DINING/i,'DINING ROOM']];
+  rooms.forEach(r=>{
+    const inside=words.filter(w=>{const x=w.x,y=w.y;
+      return x>r.pxbox[0]&&x<r.pxbox[2]&&y>r.pxbox[1]&&y<r.pxbox[3];});
+    const txt=inside.map(w=>w.t).join(' ');
+    for(const[re,name]of LEX)if(re.test(txt)){
+      r.name=name;
+      if(name==='BEDROOM'){const num=txt.match(/BEDROOM\s*(\d)|CHAMBRE\s*(\d)/i);
+        if(num)r.name='BEDROOM '+(num[1]||num[2]);}
+      break;}});
+  rooms.forEach(r=>{if(/(SHOWER|WC|BATHROOM)/.test(r.name||'')&&r.area>7)r.name=null;});
+  rooms.forEach(r=>{if(r.name)return;const has=k=>r.fixtures.some(fx=>fx.kind===k);
+    if(has('toilet')&&r.area<3.5&&!has('bathtub'))r.name='WC';
+    else if(has('bathtub'))r.name='BATHROOM';
+    else if(has('shower'))r.name='SHOWER ROOM';
+    else if(has('counter')||has('fridge'))r.name='KITCHEN';});
+  const hallR=rooms.filter(r=>!r.name).sort((a,b)=>b.doors.length-a.doors.length)[0];
+  if(hallR&&hallR.doors.length>=3)hallR.name='HALL';
+  rooms.filter(r=>!r.name&&r.area<2.2).forEach(r=>r.name='WC');
+  const un=rooms.filter(r=>!r.name).sort((a,b)=>b.area-a.area);
+  if(un[0]&&!rooms.some(r=>r.name==='LIVING ROOM'))un.shift().name='LIVING ROOM';
+  let bi=rooms.filter(r=>/^BEDROOM \d/.test(r.name||'')).length;
+  un.forEach(r=>r.name='BEDROOM '+(++bi));
+  rooms.forEach((r,i)=>{if(r.name==='BEDROOM')r.name='BEDROOM '+(++bi);});
+  // dédoublonner les noms identiques
+  const cnt={};rooms.forEach(r=>{cnt[r.name]=(cnt[r.name]||0)+1;
+    if(cnt[r.name]>1)r.name+=' ('+cnt[r.name]+')';});
+  // 9. plan.json + tracé + boutons
+  const model={project:'Plan importé (détection navigateur)',units:'m',wall_height:2.5,
+    rooms:rooms.map(r=>({name:r.name,area_m2:r.area,rect:r.rect,
+      doors:r.doors,windows:r.windows,furniture:r.fixtures}))};
+  if(entry)model.entry=entry;
+  g.strokeStyle='#d81b60';g.lineWidth=Math.max(2,im.width/700);g.setLineDash([8,5]);
+  g.font=(im.width/70|0)+'px system-ui';
+  rooms.forEach(r=>{g.strokeRect(r.pxbox[0],r.pxbox[1],
+    r.pxbox[2]-r.pxbox[0],r.pxbox[3]-r.pxbox[1]);
+    g.fillStyle='#d81b60';g.fillText(r.name+' '+r.area+' m²',r.pxbox[0]+4,r.pxbox[1]+16);});
+  g.setLineDash([]);
+  const totW=((wx1-wx0)/f/pxm).toFixed(2);
+  const base=st.textContent.split(' · ').slice(0,3).join(' · ');
+  st.innerHTML=`${base} · ${rooms.length} pièces · échelle par ${src} `+
+    `· largeur ${totW} m <a href="#" id="fixscale" style="color:#7fb3ff">corriger</a>`;
+  document.getElementById('fixscale').onclick=e=>{e.preventDefault();
+    const t=parseFloat(prompt('Largeur totale réelle du plan (m) ?',totW));
+    if(t>0)buildPlan(lastDets,lastIm,(wx1-wx0)/f/t);};
+  const b=document.getElementById('go3d');b.disabled=false;
+  b.onclick=()=>{localStorage.setItem('plancad_import',JSON.stringify(model));
+    location.href='cad.html?plan=import';};
+}
+</script>
+</body></html>

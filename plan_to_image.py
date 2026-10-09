@@ -258,6 +258,452 @@ def fetch_cloudflare(prompt, width, height, model, seed, timeout=120):
     return base64.b64decode(payload["result"]["image"])
 
 
+# ───────────────────────── geometric control mode ─────────────────────────
+# Text-only FLUX ignores the plan: it invents a generic room with the right
+# furniture but the wrong shape / windows. To actually honour the plan we
+# draw a crude one-point-perspective "clay" sketch of each room straight from
+# the spec (room area -> wall closeness, layout -> window presence + side,
+# placement/furniture -> box silhouettes) and feed THAT to img2img. The
+# generator then repaints it photoreal while keeping the geometry.
+import re as _re
+
+DEFAULT_NEG = ("lowres, blurry, deformed, distorted perspective, extra rooms, "
+               "fisheye, warped walls, watermark, text, duplicate furniture")
+
+
+def _area_m2(dimensions):
+    """Pull the floor area in m² out of a dimensions string, else None."""
+    if not dimensions:
+        return None
+    m = _re.search(r"([\d.]+)\s*m²", str(dimensions))
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+def _room_blob(room, *keys):
+    return " ".join(str(room.get(k, "")) for k in keys).lower()
+
+
+def room_has_window(room):
+    """True unless the room is explicitly windowless (cellier, WC, dressing…)."""
+    blob = _room_blob(room, "layout", "placement", "dimensions", "extra")
+    if any(w in blob for w in ("windowless", "no window", "borgne", "sans fen")):
+        return False
+    return any(w in blob for w in ("window", "glaz", "baie", "fenêtre"))
+
+
+def build_control_image(room, W, H):
+    """One-point-perspective control sketch for `room`, as a PIL.Image."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        raise RuntimeError("geometric mode needs Pillow — `pip install Pillow`")
+
+    blob = _room_blob(room, "name", "layout", "placement", "furniture", "viewpoint")
+    def has(*w):
+        return any(x in blob for x in w)
+
+    area = _area_m2(room.get("dimensions")) or 14.0
+    # small area -> walls close -> big back wall (small horizontal margin)
+    f = max(0.12, min(0.32, 0.12 + (area - 3) / 47.0 * 0.20))
+    img = Image.new("RGB", (W, H), (238, 233, 223))
+    d = ImageDraw.Draw(img)
+
+    bwl, bwr = int(f * W), int(W - f * W)
+    bwt, bwb = int(0.24 * H), int(0.70 * H)
+    wall = (235, 229, 218); ceil = (244, 240, 232); floor = (212, 200, 183)
+    side = (225, 218, 207); oak = (196, 167, 119); oak_d = (173, 144, 98)
+    appl = (236, 236, 234); glass = (213, 224, 230); dark = (150, 140, 128)
+
+    d.polygon([(0, 0), (W, 0), (bwr, bwt), (bwl, bwt)], fill=ceil)
+    d.polygon([(0, H), (W, H), (bwr, bwb), (bwl, bwb)], fill=floor)
+    d.polygon([(0, 0), (bwl, bwt), (bwl, bwb), (0, H)], fill=side)
+    d.polygon([(W, 0), (bwr, bwt), (bwr, bwb), (W, H)], fill=side)
+    d.polygon([(bwl, bwt), (bwr, bwt), (bwr, bwb), (bwl, bwb)], fill=wall)
+    vp = ((bwl + bwr) // 2, (bwt + bwb) // 2)
+    for c in [(0, 0), (W, 0), (0, H), (W, H)]:
+        d.line([c, vp], fill=dark, width=1)
+    d.rectangle([bwl, bwt, bwr, bwb], outline=dark, width=2)
+
+    # floor mapping: u=0 left..1 right, v=0 front..1 back
+    FL, FR, BL, BR = (0, H), (W, H), (bwl, bwb), (bwr, bwb)
+    def fpt(u, v):
+        bx = FL[0] + (FR[0] - FL[0]) * u
+        tx = BL[0] + (BR[0] - BL[0]) * u
+        by = FL[1] + (BL[1] - FL[1]) * v
+        return (bx + (tx - bx) * v, by)
+    def box(u, v, wu, wv, h, col, oc=None):
+        b = [fpt(u - wu / 2, v - wv / 2), fpt(u + wu / 2, v - wv / 2),
+             fpt(u + wu / 2, v + wv / 2), fpt(u - wu / 2, v + wv / 2)]
+        dy = h * (H * 0.16) * (1.0 - 0.5 * v)
+        top = [(x, y - dy) for (x, y) in b]
+        d.polygon(b, fill=tuple(max(0, c - 14) for c in col))           # footprint
+        d.polygon([b[0], b[1], top[1], top[0]], fill=col, outline=oc)   # front face
+        d.polygon([b[1], b[2], top[2], top[1]],                          # right face
+                  fill=tuple(max(0, c - 20) for c in col), outline=oc)
+        d.polygon(top, fill=tuple(min(255, c + 10) for c in col), outline=oc)  # top
+        return top
+
+    # ── windows (the part text-only FLUX gets most wrong) ──
+    if room_has_window(room):
+        vpv = str(room.get("viewpoint", "")).lower()
+        back_win = ("toward" in vpv or "facing" in vpv) and \
+                   ("window" in vpv or "windows" in vpv)
+        if back_win:
+            wx0 = bwl + int(0.22 * (bwr - bwl)); wx1 = bwr - int(0.22 * (bwr - bwl))
+            wy0 = bwt + int(0.14 * (bwb - bwt)); wy1 = bwt + int(0.66 * (bwb - bwt))
+            d.rectangle([wx0, wy0, wx1, wy1], fill=glass, outline=(120, 120, 120), width=3)
+            d.line([((wx0 + wx1) // 2, wy0), ((wx0 + wx1) // 2, wy1)],
+                   fill=(120, 120, 120), width=2)
+        else:  # window on the right-hand side wall (trapezoid in perspective)
+            d.polygon([(bwr + 12, bwt + 24), (W - 28, 96),
+                       (W - 28, H - 190), (bwr + 12, bwb - 36)],
+                      fill=glass, outline=(120, 120, 120))
+    else:  # windowless -> a ceiling light strip instead
+        cx = (bwl + bwr) // 2
+        d.line([(cx - 46, bwt - 28), (cx + 46, bwt - 28)], fill=(255, 245, 210), width=6)
+
+    # ── furniture silhouettes (rough, just enough cues for img2img) ──
+    if has("wardrobe", "storage", "cabinet", "placard", "joinery", "dressing", "rangement"):
+        box(0.5, 0.93, 0.66, 0.10, 2.0, oak, oak_d)        # full-height units, back wall
+    if has("kitchen", "counter", "island", "cabinetry", "cooktop", "worktop", "plan de travail"):
+        box(0.5, 0.86, 0.78, 0.13, 0.9, oak, oak_d)        # low counter run, back
+    if has("bed"):
+        box(0.5, 0.60, 0.44, 0.42, 0.42, (224, 216, 203), dark)   # mattress
+        box(0.5, 0.90, 0.46, 0.06, 1.0, oak, oak_d)               # headboard panel
+    if has("sofa", "daybed", "canap"):
+        box(0.34, 0.42, 0.52, 0.22, 0.4, (226, 219, 206), dark)
+    if has("dining", "round dining", "dining table", "table ronde"):
+        box(0.72, 0.52, 0.26, 0.26, 0.42, oak, oak_d)
+        for du in (-0.19, 0.19):
+            box(0.72 + du, 0.52, 0.08, 0.08, 0.5, oak_d, dark)
+    if has("bathtub", "soaking tub", "baignoire"):
+        box(0.5, 0.70, 0.52, 0.22, 0.5, appl, (185, 185, 185))
+    if has("vanity", "washbasin", "vasque", "basin", "lavabo"):
+        box(0.15, 0.5, 0.10, 0.46, 0.85, oak, oak_d)       # along left wall
+    if has("washer", "washing", "laundry", "lave-linge"):
+        t = box(0.78, 0.34, 0.16, 0.16, 0.85, appl, (120, 120, 120))
+        cx = sum(p[0] for p in t) / 4; cy = sum(p[1] for p in t) / 4
+        d.ellipse([cx - 22, cy - 22, cx + 22, cy + 22],
+                  fill=(60, 60, 64), outline=(150, 150, 150), width=3)
+    if has("toilet", "wall-hung", "wc"):
+        box(0.5, 0.82, 0.16, 0.18, 0.55, appl, (160, 160, 160))
+    if has("console", "sideboard", "bench", "banc"):
+        box(0.5, 0.86, 0.58, 0.12, 0.85, oak, oak_d)
+
+    return img
+
+
+def fetch_cloudflare_img2img(control_png, prompt, width, height,
+                             strength=0.72, negative=None, timeout=120):
+    """SD-1.5 img2img on Cloudflare Workers AI — the only FREE image-to-image
+    available. Repaints the control sketch photoreal while honouring its
+    geometry. HARD-BLOCKS on the same daily quota as the FLUX path."""
+    import base64
+    acct, tok = _cf_creds()
+    if not acct or not tok:
+        raise RuntimeError("CF creds missing — run `wrangler login` once.")
+    if not os.environ.get("P2I_BYPASS_QUOTA"):
+        _quota_check_and_increment()
+    endpoint = "@cf/runwayml/stable-diffusion-v1-5-img2img"
+    url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/{endpoint}"
+    # NB: SD-1.5 is trained at 512px. Forcing width/height to the spec's
+    # 1024×768 washes the image out and transposes the aspect, squashing the
+    # control sketch. We omit width/height so CF derives a native-scale output
+    # from the input image (this is what the working spike did).
+    body = json.dumps({
+        "prompt": prompt,
+        "negative_prompt": negative or DEFAULT_NEG,
+        "image_b64": base64.b64encode(control_png).decode(),
+        "strength": strength,
+        "guidance": 7.5,
+        "num_steps": 20,
+    }).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Authorization": f"Bearer {tok}",
+        "Content-Type": "application/json",
+        "User-Agent": "plan-to-image/1.0",
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return raw
+    data = json.loads(raw)
+    res = data.get("result")
+    if isinstance(res, dict) and res.get("image"):
+        return base64.b64decode(res["image"])
+    raise RuntimeError(f"Cloudflare img2img returned: {str(raw)[:200]}")
+
+
+# ───────────────── Qwen-Image-Edit engine (frontier, keyless) ─────────────────
+# SD-1.5 (the only free no-key img2img on CF) is a 2022 model — it regularises
+# the control sketch and looks flat. Qwen-Image-Edit (Alibaba, Apache-2.0) is a
+# 2025 frontier EDIT model that actually understands the input image (Qwen2.5-VL
+# semantic + VAE appearance control). It is reachable KEYLESS via public
+# HuggingFace Spaces (anonymous ZeroGPU ≈ 240 s/day per IP ≈ ~8 renders/day;
+# pass HF_TOKEN for a larger free quota). We feed it our geometry-correct control
+# sketch + an edit instruction → photoreal AND faithful. Falls back to SD-1.5.
+QWEN_EDIT_SPACES = ["Qwen/Qwen-Image-Edit", "multimodalart/Qwen-Image-Edit-Fast"]
+
+
+def build_edit_instruction(room, glb):
+    """Compose the natural-language EDIT instruction for Qwen-Image-Edit."""
+    style = resolve(room.get("style") or glb.get("style") or "japandi",
+                    load_vocab().get("styles", {}))
+    name = room.get("name", "room")
+    parts = [f"Turn this rough 3D blockout sketch into a photorealistic architectural "
+             f"interior photograph of a {name} in {style} style.",
+             "Keep the EXACT layout, room proportions, wall angles, and the position of "
+             "every window, door and furniture piece shown in the sketch."]
+    if not room_has_window(room):
+        parts.append("This room has NO window — do not add any window or daylight.")
+    if room.get("placement"):
+        parts.append("Furniture present: " + room["placement"] + ".")
+    if room.get("floor"):
+        parts.append("Floor: " + room["floor"] + ".")
+    if room.get("walls"):
+        parts.append("Walls: " + room["walls"] + ".")
+    parts.append("Ultra photorealistic, magazine quality, soft natural light, straight verticals.")
+    return " ".join(parts)
+
+
+def fetch_qwen_edit(image_png, instruction, hf_token=None, steps=8, guidance=4.0):
+    """Keyless (or free-HF-token) frontier image edit via a public Qwen-Image-Edit
+    HF Space. Returns PNG bytes; raises so the caller can fall back to SD-1.5."""
+    try:
+        from gradio_client import Client, handle_file
+    except ImportError:
+        raise RuntimeError("qwen engine needs gradio_client — `pip install gradio_client`")
+    import tempfile
+    tf = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    tf.write(image_png); tf.close()
+    last = None
+    for space in QWEN_EDIT_SPACES:
+        try:
+            client = Client(space, token=hf_token, verbose=False)
+            res = client.predict(handle_file(tf.name), instruction, 0, True,
+                                 float(guidance), float(steps), False, api_name="/infer")
+            img = res[0] if isinstance(res, (list, tuple)) else res
+            if isinstance(img, list) and img:
+                img = img[0]
+                if isinstance(img, dict) and "image" in img:
+                    img = img["image"]
+            path = img.get("path") if isinstance(img, dict) else img
+            return open(path, "rb").read()
+        except Exception as e:  # noqa: BLE001
+            last = e
+            continue
+    raise RuntimeError(f"Qwen-Image-Edit unavailable (quota/space busy): {last}")
+
+
+def _read_key(envname, filename):
+    """Resolve an API key from env var, else ~/.cache/plan_to_image/<filename>."""
+    v = os.environ.get(envname)
+    if v:
+        return v.strip()
+    p = os.path.expanduser(os.path.join("~/.cache/plan_to_image", filename))
+    if os.path.exists(p):
+        k = open(p, encoding="utf-8").read().strip()
+        return k or None
+    return None
+
+
+def fetch_siliconflow_edit(image_png, prompt, api_key, model="Qwen/Qwen-Image-Edit",
+                           steps=30, guidance=4.0, timeout=180):
+    """Qwen-Image-Edit on SiliconFlow — frontier edit model, OpenAI-style API,
+    base64 image in (portable, no URL hosting), ~$0.04/image with $1 free credits
+    (~25 images). Not GPU-quota throttled like HF ZeroGPU. Returns PNG bytes."""
+    import base64
+    b64 = base64.b64encode(image_png).decode()
+    body = json.dumps({
+        "model": model,
+        "prompt": prompt,
+        "image": f"data:image/png;base64,{b64}",
+        "batch_size": 1,
+        "num_inference_steps": int(steps),
+        "guidance_scale": float(guidance),
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.siliconflow.com/v1/images/generations", data=body, method="POST",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                 "User-Agent": "plan-to-image/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        data = json.loads(r.read())
+    imgs = data.get("images") or data.get("data") or []
+    url = imgs[0].get("url") if imgs and isinstance(imgs[0], dict) else None
+    if not url:
+        raise RuntimeError(f"SiliconFlow returned: {str(data)[:200]}")
+    with urllib.request.urlopen(url, timeout=timeout) as r2:
+        return r2.read()
+
+
+def render_geometric(ctrl_bytes, room, glb, engine, hf_token=None, sf_key=None,
+                     hf_steps=8, sd_strength=0.72, width=1024, height=1024):
+    """Render one geometric room through the engine ladder; return (bytes, label).
+    auto ladder (NO Google, ever): HF Qwen-Image-Edit Space (free, keyless,
+    ZeroGPU-throttled) -> SD1.5 (unlimited but flat). SiliconFlow Qwen-Image-Edit
+    is opt-in only (needs a key; paid w/ free credits). A forced engine raises if
+    its path is unavailable."""
+    instr = build_edit_instruction(room, glb)
+
+    def siliconflow():
+        if not sf_key:
+            raise RuntimeError("no SILICONFLOW_KEY / siliconflow_key")
+        return fetch_siliconflow_edit(ctrl_bytes, instr, sf_key), \
+            "Qwen-Image-Edit (SiliconFlow)"
+
+    def hf_qwen():
+        return fetch_qwen_edit(ctrl_bytes, instr, hf_token=hf_token, steps=hf_steps), \
+            "Qwen-Image-Edit (HF Space)"
+
+    def sd15():
+        neg = DEFAULT_NEG if room_has_window(room) else \
+            DEFAULT_NEG + ", window, daylight window, glass wall, large open room"
+        return fetch_cloudflare_img2img(ctrl_bytes, build_prompt(room, glb), width,
+                                        height, strength=sd_strength, negative=neg), \
+            "Cloudflare SD1.5 img2img (fallback)"
+
+    forced = {"siliconflow": siliconflow, "qwen": hf_qwen, "sd15": sd15}
+    if engine in forced:
+        return forced[engine]()                      # raises if unavailable
+    ladder = ([siliconflow] if sf_key else []) + [hf_qwen, sd15]
+    last = None
+    for fn in ladder:
+        try:
+            return fn()
+        except Exception as e:  # noqa: BLE001
+            print(f"  {fn.__name__} unavailable ({str(e)[:70]})")
+            last = e
+    raise RuntimeError(f"all engines failed: {last}")
+
+
+# ───────── geometry-aware control sketch (uses structured plan_extract geom) ─────────
+_OPP = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
+_LR = {'S': ('E', 'W'), 'N': ('W', 'E'), 'E': ('N', 'S'), 'W': ('S', 'N')}  # facing->(left,right)
+
+
+def _wall_letter(text):
+    import re as _r
+    m = _r.search(r'\b([NSEW])\b', (text or "").upper())
+    if m:
+        return m.group(1)
+    for k, v in {'NORTH': 'N', 'SOUTH': 'S', 'EAST': 'E', 'WEST': 'W'}.items():
+        if k in (text or "").upper():
+            return v
+    return None
+
+
+def build_control_from_geom(room, geom, W, H):
+    """Perspective control sketch built from STRUCTURED geometry (entry sets the
+    camera; fixtures land on their real wall left/right/back; windows on the right
+    wall; windowless rooms get none; irregular rooms get a canted wall)."""
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (W, H), (238, 233, 223)); d = ImageDraw.Draw(img)
+    wall = (234, 228, 217); ceil = (244, 240, 232); floor = (213, 201, 184)
+    side = (226, 219, 208); oak = (196, 167, 119); oak_d = (173, 144, 98)
+    appl = (237, 237, 235); glass = (211, 223, 230); dark = (162, 153, 140)
+    entry = (geom.get("entry") or 'S').upper()
+    facing = _OPP.get(entry, 'N'); left, right = _LR.get(facing, ('E', 'W'))
+    irregular = (geom.get("shape") == "irregular")
+    f = 0.17; bwl, bwr = int(f * W), int(W - f * W); bwt, bwb = int(0.25 * H), int(0.69 * H)
+    lean = 60 if irregular else 0
+    d.polygon([(0, 0), (W, 0), (bwr, bwt), (bwl, bwt)], fill=ceil)
+    d.polygon([(0, H), (W, H), (bwr, bwb), (bwl, bwb)], fill=floor)
+    d.polygon([(0, 0), (bwl + lean, bwt), (bwl + lean, bwb), (0, H)], fill=side)
+    d.polygon([(W, 0), (bwr, bwt), (bwr, bwb), (W, H)], fill=side)
+    d.polygon([(bwl, bwt), (bwr, bwt), (bwr, bwb), (bwl, bwb)], fill=wall)
+    for a, b in [((bwl, bwt), (bwr, bwt)), ((bwl, bwb), (bwr, bwb)),
+                 ((bwl, bwt), (bwl, bwb)), ((bwr, bwt), (bwr, bwb)),
+                 ((0, 0), (bwl + lean, bwt)), ((0, H), (bwl + lean, bwb)),
+                 ((W, 0), (bwr, bwt)), ((W, H), (bwr, bwb))]:
+        d.line([a, b], fill=dark, width=2)
+    FL, FR, BL, BR = (0, H), (W, H), (bwl, bwb), (bwr, bwb)
+
+    def fpt(u, v):
+        bx = FL[0] + (FR[0] - FL[0]) * u; tx = BL[0] + (BR[0] - BL[0]) * u
+        return (bx + (tx - bx) * v, FL[1] + (BL[1] - FL[1]) * v)
+
+    def box(u, v, wu, wv, h, col, circ=0):
+        b = [fpt(u - wu / 2, v - wv / 2), fpt(u + wu / 2, v - wv / 2),
+             fpt(u + wu / 2, v + wv / 2), fpt(u - wu / 2, v + wv / 2)]
+        dy = h * (H * 0.16) * (1 - 0.5 * v); top = [(x, y - dy) for (x, y) in b]
+        d.polygon(b, fill=tuple(max(0, c - 14) for c in col))
+        d.polygon([b[0], b[1], top[1], top[0]], fill=col, outline=oak_d)
+        d.polygon([b[1], b[2], top[2], top[1]], fill=tuple(max(0, c - 20) for c in col), outline=oak_d)
+        d.polygon(top, fill=tuple(min(255, c + 8) for c in col), outline=oak_d)
+        for _ in range(circ):
+            cx = (b[0][0] + b[1][0]) / 2; cy = (b[0][1] + top[0][1]) / 2
+            d.ellipse([cx - 18, cy - 18, cx + 18, cy + 18], fill=(70, 70, 74),
+                      outline=(150, 150, 150), width=3)
+
+    wins = [o for o in geom.get("openings", []) if o.get("kind") == "window"]
+    for o in wins:
+        w = (o.get("wall") or "").upper()
+        if w == facing:
+            d.rectangle([bwl + 0.25 * (bwr - bwl), bwt + 0.15 * (bwb - bwt),
+                         bwr - 0.25 * (bwr - bwl), bwt + 0.64 * (bwb - bwt)],
+                        fill=glass, outline=(120, 120, 120), width=3)
+        elif w == right:
+            d.polygon([(bwr + 8, bwt + 14), (W - 34, bwt + 34), (W - 34, bwb + 36),
+                       (bwr + 8, bwb - 12)], fill=glass, outline=(120, 120, 120))
+        elif w == left:
+            d.polygon([(34, bwt + 34), (bwl - 8, bwt + 14), (bwl - 8, bwb - 12),
+                       (34, bwb + 36)], fill=glass, outline=(120, 120, 120))
+    if not wins:
+        cx = (bwl + bwr) // 2
+        d.line([(cx - 48, bwt - 26), (cx + 48, bwt - 26)], fill=(255, 246, 212), width=6)
+
+    def kind(item):
+        s = (item or "").lower()
+        if any(k in s for k in ('washer', 'washing', 'machine', 'dryer', 'lave-linge', 'seche', 'ml ', 'sl ')):
+            return ('appl', 0.16, 0.16, 0.85, 1)
+        if 'pac' in s or 'heat' in s or 'pump' in s:
+            return ('tall', 0.14, 0.12, 1.6, 0)
+        if 'bed' in s or 'lit' in s:
+            return ('bed', 0.5, 0.42, 0.42, 0)
+        if 'bath' in s or 'baign' in s:
+            return ('appl', 0.5, 0.22, 0.5, 0)
+        if 'wc' in s or 'toilet' in s:
+            return ('appl', 0.18, 0.18, 0.55, 0)
+        if any(k in s for k in ('sink', 'vasque', 'basin', 'lavabo', 'evier')):
+            return ('low', 0.4, 0.4, 0.82, 0)
+        if any(k in s for k in ('placard', 'wardrobe', 'cabinet', 'storage', 'joinery', 'rangement')):
+            return ('tall', 0.14, 0.5, 1.8, 0)
+        if any(k in s for k in ('sofa', 'canape', 'daybed')):
+            return ('low', 0.5, 0.22, 0.4, 0)
+        if any(k in s for k in ('cuisson', 'cooktop', 'kitchen', 'counter', 'plaque', 'plan de travail')):
+            return ('low', 0.7, 0.13, 0.9, 0)
+        return ('low', 0.2, 0.2, 0.6, 0)
+
+    sides = {'back': [], 'left': [], 'right': []}
+    for fx in geom.get("fixtures", []):
+        w = _wall_letter(fx.get("where") or fx.get("wall") or "")
+        if w == facing:
+            sides['back'].append(fx)
+        elif w == left:
+            sides['left'].append(fx)
+        elif w == right:
+            sides['right'].append(fx)
+    for sidename, fxs in sides.items():
+        n = len(fxs)
+        for i, fx in enumerate(fxs):
+            t, wu, wv, h, circ = kind(fx.get("item"))
+            col = appl if t == 'appl' else oak
+            frac = (i + 1) / (n + 1)
+            if sidename == 'left':
+                u, v = 0.13, 0.25 + 0.5 * frac
+            elif sidename == 'right':
+                u, v = 0.87, 0.25 + 0.5 * frac
+            else:
+                u, v = 0.3 + 0.4 * frac, 0.9
+            box(u, v, wu, wv, h, col, circ=circ)
+    return img
+
+
 def fetch_image(prompt, width, height, model, seed, retries=3, provider="auto"):
     """Provider routing:
       - "auto"        : Pollinations primary, Cloudflare fallback (default)
@@ -350,6 +796,21 @@ def main():
     ap.add_argument("--provider", default="auto",
                     choices=["auto", "pollinations", "cloudflare"],
                     help="auto=Pollinations + CF fallback (default)")
+    ap.add_argument("--mode", default="text", choices=["text", "geometric"],
+                    help="text=FLUX from prompt (pretty, ignores plan shape); "
+                         "geometric=img2img seeded by a perspective sketch built "
+                         "from the spec geometry (honours the plan, CF free img2img)")
+    ap.add_argument("--strength", type=float, default=0.72,
+                    help="geometric mode, SD1.5 engine only: img2img denoise "
+                         "strength (~0.55 faithful/flat, ~0.8 photoreal/looser)")
+    ap.add_argument("--engine", default="auto",
+                    choices=["auto", "siliconflow", "qwen", "sd15"],
+                    help="geometric render engine (NO Google). auto ladder: HF "
+                         "Qwen-Image-Edit Space (free, keyless, throttled) → SD1.5 "
+                         "(flat, unlimited). qwen=force HF Qwen, sd15=force SD1.5, "
+                         "siliconflow=opt-in (needs key).")
+    ap.add_argument("--qwen-steps", type=int, default=8,
+                    help="Qwen-Image-Edit inference steps (keep low for ZeroGPU quota)")
     args = ap.parse_args()
 
     spec = json.load(open(args.spec, "r", encoding="utf-8"))
@@ -364,6 +825,10 @@ def main():
         if not rooms:
             sys.exit(f"no rooms matched --only={args.only!r}")
 
+    if args.mode == "geometric":
+        print(f"  mode: geometric (img2img, strength {args.strength}) — "
+              f"control sketch built from spec geometry, CF free img2img")
+
     cards = []
     for r in rooms:
         name = r.get("name", "room")
@@ -373,8 +838,28 @@ def main():
         print(f"\n[{name}]")
         print("  prompt:", prompt[:140] + ("…" if len(prompt) > 140 else ""))
         print(f"  -> {png_path}")
-        data = fetch_image(prompt, args.width, args.height, args.model,
-                           args.seed, provider=args.provider)
+        if args.mode == "geometric":
+            # geometry-aware control if structured geom is present (from plan_extract),
+            # else the heuristic spec-driven sketch
+            if r.get("_geom"):
+                ctrl = build_control_from_geom(r, r["_geom"], args.width, args.height)
+            else:
+                ctrl = build_control_image(r, args.width, args.height)
+            ctrl_name = slug(name) + "_control.png"
+            ctrl.save(os.path.join(out_dir, ctrl_name))
+            import io
+            buf = io.BytesIO(); ctrl.save(buf, "PNG"); ctrl_bytes = buf.getvalue()
+            print(f"  control: {ctrl_name}  (window={room_has_window(r)})")
+            data, label = render_geometric(
+                ctrl_bytes, r, glb, args.engine,
+                hf_token=_read_key("HF_TOKEN", "hf_token"),
+                sf_key=_read_key("SILICONFLOW_KEY", "siliconflow_key"),
+                hf_steps=args.qwen_steps, sd_strength=args.strength,
+                width=args.width, height=args.height)
+            print("  engine:", label)
+        else:
+            data = fetch_image(prompt, args.width, args.height, args.model,
+                               args.seed, provider=args.provider)
         with open(png_path, "wb") as f:
             f.write(data)
         cards.append(CARD.format(name=name, file=png_name, prompt=prompt))

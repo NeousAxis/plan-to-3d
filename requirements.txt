@@ -6,5 +6,6 @@ pymupdf           # ingest.py: PDF -> PNG (one page per image)
 matplotlib        # generate.py --preview: isometric PNG preview render
 
 # Optional extras (uncomment if needed):
+# gradio_client   # render_router.py: Hugging Face Spaces engines from Python
 # cairosvg        # ingest.py: rasterize .svg plans
 # pygltflib       # validate the produced .glb against the glTF 2.0 spec
