@@ -16,7 +16,7 @@ mécanismes (cartographie de leur code faite par agent). Base de travail : la br
 `claude/projet-non-fonctionnel-176437` (a1035fc, plus récente que `main`), nouvelle branche
 `claude/stage-render` dans le worktree `.claude/worktrees/stage-render`.
 
-### Ce qui est construit (non commité)
+### Ce qui est construit (fusionné dans `main` le 2026-10-09, PR #1 ; gh-pages non redéployé)
 | Couche ArtCraft | Ici | Fichier |
 |---|---|---|
 | Moteur de scène pagescene (caméra `::CAM::`, vue caméra, capture, gizmo) | caméras de rendu dans PlanCAD : pyramide de visée + volume de sélection invisible sur le **calque 1** (jamais capturé), focale → champ vertical `2·atan(12/f)` (capteur 24 mm), formats 16:9, 3:2, 4:3, 1:1, 2:3, 9:16 (UNE table de tailles), vue caméra cadrée par `setViewOffset` + caches, gizmo TransformControls r128, glyphes 2D (cône de champ) déplaçables, poignée d'orientation, pose au clic, caméra auto par pièce, touche C en visite | `web/stage/stage.js` |
