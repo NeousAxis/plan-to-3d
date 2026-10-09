@@ -16,7 +16,7 @@ mécanismes (cartographie de leur code faite par agent). Base de travail : la br
 `claude/projet-non-fonctionnel-176437` (a1035fc, plus récente que `main`), nouvelle branche
 `claude/stage-render` dans le worktree `.claude/worktrees/stage-render`.
 
-### Ce qui est construit (fusionné dans `main` le 2026-10-09, PR #1 ; gh-pages non redéployé)
+### Ce qui est construit (fusionné dans `main` le 2026-10-09, PR #1 à #4 ; en ligne sur gh-pages)
 | Couche ArtCraft | Ici | Fichier |
 |---|---|---|
 | Moteur de scène pagescene (caméra `::CAM::`, vue caméra, capture, gizmo) | caméras de rendu dans PlanCAD : pyramide de visée + volume de sélection invisible sur le **calque 1** (jamais capturé), focale → champ vertical `2·atan(12/f)` (capteur 24 mm), formats 16:9, 3:2, 4:3, 1:1, 2:3, 9:16 (UNE table de tailles), vue caméra cadrée par `setViewOffset` + caches, gizmo TransformControls r128, glyphes 2D (cône de champ) déplaçables, poignée d'orientation, pose au clic, caméra auto par pièce, touche C en visite | `web/stage/stage.js` |
@@ -55,10 +55,16 @@ vue caméra (cadre, focale à la molette, sortie propre), touche C en visite, ex
 Cloudflare klein 4B (séjour, chambre 1, cuisine), klein 9B (séjour), HF klein 4B depuis le navigateur. Séjour et chambre :
 murs, fenêtres et mobilier respectés (petites inventions : plante, nombre de chaises). **Ne jamais dire « fidèle » sans le
 côte à côte** : la visionneuse le rappelle. `?eye=` et Visiter toujours OK.
+Page publique (https://neousaxis.github.io/plan-to-3d/cad.html?stage=1) vérifiée après déploiement : rendus HF klein 4B
+(séjour, chambre 1) en moins de 10 s, côte à côte OK, aucune erreur console.
+**Règle : la page publique ne doit JAMAIS appeler 127.0.0.1 d'elle-même.** Chrome affiche alors à chaque visiteur une
+demande d'autorisation « réseau local » (Local Network Access). Le pont n'est sondé que depuis une page locale, ou après
+un clic sur « Utiliser mon pont local » (succès mémorisé dans `plancad_bridge_optin`).
 
 ### Pas fait / suite possible
 Pas d'historique annuler/refaire, pas d'enregistrement vidéo de la timeline (mediabunny chez ArtCraft), pas de canevas 2D
-d'inpainting, pas d'image de style en 2e référence (le modèle en accepte 4), page GitHub (gh-pages) **non redéployée**.
+d'inpainting, pas d'image de style en 2e référence (le modèle en accepte 4). Déployer gh-pages = commit dont l'arbre est `main:web`,
+parent = sommet actuel de gh-pages (avance rapide, jamais de force).
 
 ## ⚡⚡⚡⚡⚡ SESSION 2026-08-14 #6 — Vectoriseur de murs VALIDÉ : la référence était fausse, pas l'algo
 
