@@ -17,21 +17,33 @@
   }
   const R = { catalog: null, bridge: null, bridgeInfo: null, hfToken: '' };
   try { R.hfToken = localStorage.getItem('plancad_hf_token') || ''; } catch (e) { /* stockage indisponible */ }
+  const LOCAL_PAGE = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(location.origin);
+  const OPT_IN = 'plancad_bridge_optin';
 
   async function load() {
     R.catalog = await fetch('stage/catalog.json').then(r => r.json());
-    await probeBridge();
     return R.catalog;
   }
-  async function probeBridge() {
-    const local = /^http:\/\/(127\.0\.0\.1|localhost):/.test(location.origin);
+  /* Une page publique qui appelle 127.0.0.1 fait afficher par Chrome une demande
+     d'autorisation « réseau local » : on ne sonde donc le pont que depuis une page
+     locale, ou après un clic (force) dont le succès est mémorisé.
+     Renvoie true (pont trouvé), false (absent) ou null (pas sondé). */
+  async function probeBridge(force) {
+    let optIn = false;
+    try { optIn = localStorage.getItem(OPT_IN) === '1'; } catch (e) { /* stockage indisponible */ }
+    if (!LOCAL_PAGE && !force && !optIn) { R.bridge = null; R.bridgeInfo = null; return null; }
     const bases = [];
-    if (local && location.port === String(BRIDGE_PORT)) bases.push('');
+    if (LOCAL_PAGE && location.port === String(BRIDGE_PORT)) bases.push('');
     bases.push(`http://127.0.0.1:${BRIDGE_PORT}`);
     for (const b of bases) {
       try {
         const r = await fetch(b + '/api/models', { cache: 'no-store' });
-        if (r.ok) { R.bridgeInfo = await r.json(); R.bridge = b; return true; }
+        if (r.ok) {
+          R.bridgeInfo = await r.json();
+          R.bridge = b;
+          if (!LOCAL_PAGE) { try { localStorage.setItem(OPT_IN, '1'); } catch (e) { /* stockage indisponible */ } }
+          return true;
+        }
       } catch (e) { /* pont absent */ }
     }
     R.bridge = null;
