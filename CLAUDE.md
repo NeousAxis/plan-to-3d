@@ -4,6 +4,61 @@
 > Mis à jour 2026-07-02 **(session #4)**. Direction actée par l'user : **structurer les outils
 > existants en « ARES-lite »** autour d'une source de vérité unique (`plan.json`).
 > Lis ⚡⚡⚡ (#4) puis les leçons de ⚡⚡ (#3) AVANT tout.
+> Dernière session : **#7 du 2026-10-09** (Stage : caméras de rendu, capture, rendu photo), ci-dessous.
+
+## ⚡⚡⚡⚡⚡⚡ SESSION 2026-10-09 #7 : Stage (caméras de rendu → capture → rendu photo), architecture reprise d'ArtCraft
+
+### Demande de l'user
+Reprendre dans planto3d la partie utile d'**ArtCraft** (github.com/storytold/artcraft, appli « 3D Stage →
+capture → génération IA ») ET son architecture. **Licence ArtCraft = usage privé uniquement, interdit pour un
+produit concurrent ; ce repo est PUBLIC → aucun fichier copié, tout est réécrit** à partir de leurs
+mécanismes (cartographie de leur code faite par agent). Base de travail : la branche
+`claude/projet-non-fonctionnel-176437` (a1035fc, plus récente que `main`), nouvelle branche
+`claude/stage-render` dans le worktree `.claude/worktrees/stage-render`.
+
+### Ce qui est construit (non commité)
+| Couche ArtCraft | Ici | Fichier |
+|---|---|---|
+| Moteur de scène pagescene (caméra `::CAM::`, vue caméra, capture, gizmo) | caméras de rendu dans PlanCAD : pyramide de visée + volume de sélection invisible sur le **calque 1** (jamais capturé), focale → champ vertical `2·atan(12/f)` (capteur 24 mm), formats 16:9, 3:2, 4:3, 1:1, 2:3, 9:16 (UNE table de tailles), vue caméra cadrée par `setViewOffset` + caches, gizmo TransformControls r128, glyphes 2D (cône de champ) déplaçables, poignée d'orientation, pose au clic, caméra auto par pièce, touche C en visite | `web/stage/stage.js` |
+| Bus d'événements + état + UI qui n'appelle que des actions | panneau 🎬 Stage (caméras, réglages, rendu photo, file d'attente) + visionneuse capture / rendu / côte à côte | `web/stage/ui.js`, `web/stage/stage.css` |
+| model-list (capacités) | **catalogue unique JSON** lu par le navigateur ET Python : modèles, moteurs, coûts, styles, tailles, interdits (Google, payant) | `web/stage/catalog.json` |
+| artcraft_router (build → estimate → send, erreurs typées) | routeur navigateur (moteurs : pont local, Space HF via `@gradio/client@2.7.0`) | `web/stage/router.js` |
+| idem côté Rust | routeur Python + budget Cloudflare en **neurones** réservé AVANT l'appel (plafond 9000/jour UTC, `~/.cache/plan_to_image/cf_neurons.json`, verrou fichier) + CLI | `render_router.py` |
+| commandes Tauri + tâches SQLite | **pont local** : sert `web/` + API JSON (`/api/media`, `/api/generate/image`, `/api/estimate`, `/api/tasks`), tâches SQLite `work/stage/tasks.db` aux états d'ArtCraft (pending → started → complete_success / complete_failure), origines autorisées : lui-même + neousaxis.github.io (préflight réseau privé géré) | `tools/render_bridge.py` |
+| TaskQueue | file côté navigateur, une tâche à la fois, progression simulée plafonnée à 95 % | `web/stage/tasks.js` |
+
+Caméras = `plan.json` → `cameras[{id,label,room,x,y,h,yaw,pitch,focal,aspect}]` (x, y en m du plan, y vers le
+bas ; `yaw` cap en degrés, 0 = nord du plan, 90 = est ; rotation Three `y = -yaw`). Exportées avec « Exporter JSON »,
+copie de confort dans le localStorage par plan. Crochets dans `cad.html` : boucle (`Stage.tick`), fin de
+`build3d` (`Stage.sceneBuilt`), fin de `draw2d`, `setModel`, garde clavier dans les champs, boot (`Stage.init`).
+
+### Commandes
+```bash
+python3 tools/render_bridge.py                 # http://127.0.0.1:8790/cad.html?stage=1 (&plan=plans/x.json)
+python3 render_router.py models | estimate --model flux-2-klein-4b | render --model … --ref capture.png --prompt "…" -o out.png
+python3 -m unittest tests/test_render_router.py   # 15 tests hors réseau
+```
+
+### Moteurs (gratuits, sans carte, sans Google) et coûts mesurés
+- **Cloudflare FLUX.2 klein 4B** (via le pont) : ≈ 162 neurones en 1280×720, ~7 à 15 s. Le budget neurones en permettrait ~55/jour,
+  mais la garde historique de plan_to_image (40 appels Cloudflare/jour, tous usages confondus) s'applique aussi : **40 au plus**. **Le plus fidèle
+  dans nos tests.** klein 9B ≈ 1546 neurones (invente plus : 2e canapé ajouté au séjour). FLUX.2 dev ≈ 4875 (1 à 2/jour).
+  Multipart obligatoire, champs `input_image_0..3` (< 512 px, réduits par le routeur). Jeton wrangler expiré (401) →
+  `wrangler whoami` relancé automatiquement puis nouvel essai.
+- **Spaces HF officiels depuis le navigateur** (seule voie sur la page GitHub publique) : `black-forest-labs/FLUX.2-klein-4B`
+  (`/infer`), `-9B` (`/generate`), `FLUX.1-Kontext-Dev`, `Qwen/Qwen-Image-Edit` ; quota ZeroGPU anonyme, jeton HF de l'user facultatif.
+- FLUX.1 schnell = texte seul, marqué ⚠ (ne suit pas le plan).
+
+### Vérifié dans le navigateur (2026-10-09, plan vectorisé apartment_2br.json)
+Panneau, caméras auto (9 pièces), glisser / orienter en 2D, pose au clic, gizmo 3D (déplacement relu dans plan.json),
+vue caméra (cadre, focale à la molette, sortie propre), touche C en visite, export/import des caméras, rendus réels
+Cloudflare klein 4B (séjour, chambre 1, cuisine), klein 9B (séjour), HF klein 4B depuis le navigateur. Séjour et chambre :
+murs, fenêtres et mobilier respectés (petites inventions : plante, nombre de chaises). **Ne jamais dire « fidèle » sans le
+côte à côte** : la visionneuse le rappelle. `?eye=` et Visiter toujours OK.
+
+### Pas fait / suite possible
+Pas d'historique annuler/refaire, pas d'enregistrement vidéo de la timeline (mediabunny chez ArtCraft), pas de canevas 2D
+d'inpainting, pas d'image de style en 2e référence (le modèle en accepte 4), page GitHub (gh-pages) **non redéployée**.
 
 ## ⚡⚡⚡⚡⚡ SESSION 2026-08-14 #6 — Vectoriseur de murs VALIDÉ : la référence était fausse, pas l'algo
 

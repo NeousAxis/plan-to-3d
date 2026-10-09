@@ -23,7 +23,7 @@ plan.png ─► 1. rooms+dims  (plan_reader / printed dims solver)
          ─► 2. openings    (detections from the PUBLIC browser page or local model)
          ─► 3. AUDIT       (plan_audit overlay vs source image — MANDATORY)
          ─► 4. 3D + visite (web/cad.html : 2D+3D synchro, Visiter, ?shot=tour)
-         ─► 5. (option) photoreal renders per room (FLUX, free)
+         ─► 5. (option) photo renders from PlanCAD Stage cameras (3D capture → FLUX.2, free)
 ```
 
 ## Zero-install path (what the user's friends use)
@@ -60,7 +60,30 @@ overlay (rooms red, doors green, windows blue, furniture orange, entry
 magenta) is the only accepted proof of fidelity; `MODEL.entry` carries the
 front door; label-only HALL rooms get floor/walls/spots automatically.
 
-## Optional step 5 — photoreal renders (plan-to-image)
+## Step 5 (recommended): photo renders from PlanCAD Stage cameras
+
+The 3D capture of a render camera is sent as the reference image of a free
+image-edit model, so the render keeps the walls, openings and furniture of
+the plan. Still compare capture and render side by side before calling it
+faithful (the viewer has a « Côte à côte » tab).
+
+```bash
+python3 tools/render_bridge.py      # then http://127.0.0.1:8790/cad.html?plan=plans/x.json&stage=1
+# 🎬 Stage: « Auto : toutes les pièces », pick a camera, « ✨ Capturer et rendre »
+# headless: python3 render_router.py render --model flux-2-klein-4b --ref capture.png --prompt "…" -o out.png
+```
+
+Engines live in `web/stage/catalog.json` (free, no card, no Google):
+Cloudflare Workers AI FLUX.2 klein 4B (about 162 neurons per 1280×720
+render through the local bridge; at most 40 a day, the historical
+plan_to_image guard of 40 Cloudflare calls per day still applies),
+klein 9B and FLUX.2 dev; Hugging Face Spaces called from the browser
+(FLUX.2 klein 4B/9B, Kontext, Qwen-Image-Edit, anonymous ZeroGPU quota),
+the only engines available on the public GitHub page. The Cloudflare cost
+is estimated and reserved before every call, with a hard cap of 9000
+neurons per UTC day. Cameras are stored in `plan.json` (`cameras[]`).
+
+## Optional: text-only dressing renders (plan-to-image)
 
 Turn each room into an AD-grade image with **FLUX via Pollinations.ai**
 (free, anonymous, no API key), composing prompts from `vocabulary.json`.
