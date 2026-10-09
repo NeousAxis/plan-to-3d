@@ -284,6 +284,8 @@
     enqueueShot(shot, Object.assign({}, cam, { aspect: t.aspect }), 1);
   }
   function onClick(e) {
+    const tab = e.target.closest('.st-lb-tabs [data-tab]');   // onglets de la visionneuse
+    if (tab) { if (!tab.disabled) { LB.tab = tab.dataset.tab; drawLightbox(); } return; }
     const el = e.target.closest('[data-act]');
     const camEl = e.target.closest('[data-cam]'), taskEl = e.target.closest('[data-task]');
     if (camEl && (!el || !el.closest('.st-cact'))) Stage.select(camEl.dataset.cam);   // clic sur une ligne
